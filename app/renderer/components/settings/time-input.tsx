@@ -231,7 +231,7 @@ export default function TimeInput({
         maxLength={2}
         className="w-6 bg-transparent p-0 text-center outline-none"
       />
-      <span className="self-end text-[11px] text-stone">h</span>
+      <span className="self-end font-sans text-[11px] text-stone">h</span>
 
       <span className="mx-0.5 text-stone">:</span>
 
@@ -249,7 +249,7 @@ export default function TimeInput({
         maxLength={2}
         className="w-6 bg-transparent p-0 text-center outline-none"
       />
-      <span className="self-end text-[11px] text-stone">m</span>
+      <span className="self-end font-sans text-[11px] text-stone">m</span>
 
       {precision === "seconds" && (
         <>
@@ -268,7 +268,7 @@ export default function TimeInput({
             maxLength={2}
             className="w-6 bg-transparent p-0 text-center outline-none"
           />
-          <span className="self-end text-[11px] text-stone">s</span>
+          <span className="self-end font-sans text-[11px] text-stone">s</span>
         </>
       )}
     </div>

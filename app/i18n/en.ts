@@ -17,6 +17,20 @@ export const en = {
   "nav.save": "Save",
   "nav.saved": "All changes saved",
 
+  /* --- page heads (the reference's .section-head: eyebrow, 32px title, lede) */
+  "page.general.title": "How breaks work",
+  "page.general.lede":
+    "How often a break arrives, how long it lasts, and what happens when it does.",
+  "page.hours.title": "When you are covered",
+  "page.hours.lede":
+    "Only show breaks during your configured work schedule. Drag a band to move it, or click one to set exact times.",
+  "page.customization.title": "What a break looks like",
+  "page.customization.lede":
+    "The sheet a break fills the screen with, the veil behind it, and the tone at each end.",
+  "page.system.title": "How Fermata behaves",
+  "page.system.lede":
+    "Language, starting with your computer, and what the menu bar shows.",
+
   /* --- sections --------------------------------------------------------- */
   "sec.breaks.title": "Breaks",
   "sec.breaks.helper":

@@ -20,6 +20,18 @@ export const zh: Record<MessageKey, string> = {
   "nav.save": "保存",
   "nav.saved": "已保存",
 
+  /* --- 页头（对应参考的 .section-head：eyebrow + 32px 标题 + 导语） --- */
+  "page.general.title": "休息是怎么运作的",
+  "page.general.lede": "多久休息一次、休息多久，以及到点之后会发生什么。",
+  "page.hours.title": "什么时候该休息",
+  "page.hours.lede":
+    "只在设定的工作时段内提醒。拖拽色块可以整体移动，点击可以输入精确时间。",
+  "page.customization.title": "休息时你看到什么",
+  "page.customization.lede":
+    "休息时铺满屏幕的那张纸、它后面的遮罩，以及开始和结束时的提示音。",
+  "page.system.title": "Fermata 的行为",
+  "page.system.lede": "语言、开机启动，以及菜单栏显示什么。",
+
   /* --- 区块 ------------------------------------------------------------- */
   "sec.breaks.title": "休息",
   "sec.breaks.helper": "多久休息一次、休息多久，以及休息时显示什么。",

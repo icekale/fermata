@@ -141,20 +141,69 @@ The mono stack is declared for technical strings only and is currently unused.
 
 ### Type ladder
 
-Every size in the app is one of these. No in-between values.
+The first two builds of this app had no scale: everything ran from 23px down to
+11px, which is a 2:1 span. mole.fit's measured rendering runs **96 / 52 / 32 / 22
+/ 18 / 17 / 16 / 15 / 14** — a 7:1 span — and that span is most of what makes it
+read as _set_ rather than _scaled up_. A window has no use for a 96px wordmark,
+but it can carry 32 over 17 over 13.
 
-| Size                          | Role                                                                   |
-| ----------------------------- | ---------------------------------------------------------------------- |
-| `clamp(56px, 24cqmin, 220px)` | the break countdown — the only display size                            |
-| 23px                          | dialog titles                                                          |
-| 20px                          | the break sheet's title                                                |
-| 17px                          | section titles                                                         |
-| 16px                          | footer / display lockups                                               |
-| 15px                          | the wordmark, running prose                                            |
-| 14px                          | control values, button labels, list rows                               |
-| 13px                          | field labels, secondary prose, the index numerals                      |
-| 12px                          | meta, swatch names, colour readouts                                    |
-| 11px                          | **the floor.** Uppercase micro-labels and axis marks only, never prose |
+| Size                          | Face     | Role                                                                               |
+| ----------------------------- | -------- | ---------------------------------------------------------------------------------- |
+| `clamp(56px, 24cqmin, 220px)` | serif    | the break countdown — the only truly display size                                  |
+| **32px**                      | serif    | **the page head**, `-0.3px` tracking (the reference's `.section-title`)            |
+| 23px                          | serif    | dialog titles                                                                      |
+| 20px                          | serif    | the break sheet's title                                                            |
+| 17px                          | serif    | section titles                                                                     |
+| 16px                          | serif    | the page lede (the reference's `.section-lede`)                                    |
+| 15px                          | serif    | the wordmark, running prose                                                        |
+| 14px                          | serif    | **the serif floor** — inputs, buttons, the rail's group names, section helper text |
+| 13px                          | **sans** | field labels, the rail's section entries                                           |
+| 12px                          | **sans** | meta, swatch names, colour readouts, the rail's numerals                           |
+| 11px                          | **sans** | **the floor** — uppercase micro-labels only, never prose                           |
+
+#### The serif floor at 14px
+
+This is the reference's own rule, stated in its ladder comment ("12 is uppercase
+micro-labels and badges only, never prose") and confirmed by measuring what it
+renders: **nothing on mole.fit is set in Charter below 14px**. Below that it is
+the system sans, which is what a UI sans is for — screen-optimised at exactly the
+sizes where a text serif loses its counters.
+
+Both earlier builds broke this in the same direction, and that is why the type
+looked wrong twice over:
+
+- Charter at 11–13px for field labels, day names, meta and readouts.
+- **Songti SC at 13–17px for every Chinese string**, because the stack named
+  Source Han and Songti but the app shipped neither, so Chinese fell through to
+  the print face macOS happens to have. Songti is drawn for paper at reading
+  sizes; at 13px on a screen it goes spindly and washed out.
+
+Exactly one thing is exempt, and it is deliberate: the countdown on the break
+sheet is a display size and stays serif at any size.
+
+#### The Chinese serif is shipped, not hoped for
+
+`app/renderer/public/fonts/NotoSerifSC-{Regular,SemiBold}.woff2`, 5.7MB each,
+subsetted to Latin, punctuation, CJK symbols and the Unified Ideographs, under
+the OFL (`OFL.txt` sits beside them). Noto Serif SC _is_ Source Han Serif — Adobe
+and Google co-released it.
+
+mole.fit reached the same conclusion and says so in its stylesheet: "iOS ships NO
+Chinese serif… the page has to carry one." The face is declared with
+`unicode-range` covering only the CJK blocks, so Latin still sets in Charter and
+this face only ever picks up what Charter does not have. Local fonts are
+deliberately **not** tried first: the point is that the design is the same on
+every machine, not whatever each one happens to have installed.
+
+A CDP probe (`CSS.getPlatformFontsForNode`) is the only way to see this — a font
+stack is a wish, not a fact:
+
+```
+Charter           "Fermata"          Latin
+Noto Serif SC     "智能休息"          body Chinese
+Noto Serif SC SemiBold  "工作时间"     heading Chinese
+PingFang SC       "已保存"           micro-labels
+```
 
 ## Component grammar
 

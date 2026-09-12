@@ -49,9 +49,9 @@ export default function AudioCard({
               disabled={quiet}
               aria-label={t("sec.audio.volume")}
             />
-            <div className="mt-2 flex justify-between text-[12px] text-stone">
+            <div className="mt-2 flex justify-between font-sans text-[12px] text-stone">
               <span>{t("sec.audio.silent")}</span>
-              <span className="tnum text-ink">
+              <span className="tnum font-sans text-ink">
                 {Math.round(settingsDraft.breakSoundVolume * 100)}%
               </span>
               <span>{t("sec.audio.full")}</span>

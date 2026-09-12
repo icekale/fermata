@@ -45,7 +45,9 @@ export default function VeilCard({
               className="size-3.5 rounded-full border border-rule"
               style={{ backgroundColor: settingsDraft.veilColor }}
             />
-            <span className="tnum text-[13px] text-ink">{percent}%</span>
+            <span className="tnum font-sans text-[13px] text-ink">
+              {percent}%
+            </span>
           </span>
         </div>
         <Slider
@@ -57,7 +59,7 @@ export default function VeilCard({
           disabled={off}
           aria-label={t("sec.veil.strength")}
         />
-        <div className="mt-2 flex justify-between text-[12px] text-stone">
+        <div className="mt-2 flex justify-between font-sans text-[12px] text-stone">
           <span>20%</span>
           <span>100%</span>
         </div>

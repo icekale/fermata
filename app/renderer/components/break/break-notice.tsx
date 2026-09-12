@@ -98,7 +98,7 @@ export function BreakNotice({
               </span>
             )}
             {timeSinceLastBreak !== null && (
-              <span className="truncate text-[12px] leading-none text-stone">
+              <span className="truncate font-sans text-[12px] leading-none text-stone">
                 {(() => {
                   const since = formatTimeSinceLastBreak(timeSinceLastBreak);
                   return t(since.key, since.vars);

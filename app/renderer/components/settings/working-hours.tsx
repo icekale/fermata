@@ -70,7 +70,7 @@ export default function WorkingHoursSettings({
               <span
                 key={hour}
                 className={cn(
-                  "tnum absolute bottom-0 text-[11px] leading-none text-stone",
+                  "tnum absolute bottom-0 font-sans text-[11px] leading-none text-stone",
                   isFirst && "left-0",
                   isLast && "right-0",
                   isFirst === false && isLast === false && "-translate-x-1/2",
@@ -104,7 +104,7 @@ export default function WorkingHoursSettings({
         ))}
       </div>
 
-      <p className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-2 text-[12px] leading-none text-stone">
+      <p className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-2 font-sans text-[12px] leading-none text-stone">
         <span className="flex items-center gap-1.5">
           <span aria-hidden="true" className="h-3 w-px bg-stamp" />
           {t("ledger.now")}
@@ -175,7 +175,7 @@ function DayRow({
     <div className="grid grid-cols-[40px_1fr_36px] items-center gap-x-3">
       <span
         className={cn(
-          "text-[13px] leading-none",
+          "font-sans text-[13px] leading-none",
           inactive ? "text-stone" : "text-ink",
         )}
       >

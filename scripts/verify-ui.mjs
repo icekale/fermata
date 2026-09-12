@@ -416,6 +416,31 @@ const AUDIT = String.raw`(() => {
     }
   }
 
+  // The rendered type scale, deduped by size. The reference spans 96 -> 14 and
+  // the span is most of what makes it look set; a build whose scale runs 23 -> 11
+  // has no scale at all, and that is invisible in any single screenshot.
+  const scale = new Map();
+  for (const el of all) {
+    if (visible(el) === false) continue;
+    const hasText = Array.from(el.childNodes).some(
+      (n) => n.nodeType === 3 && n.textContent.trim().length > 1,
+    );
+    if (hasText === false) continue;
+    const cs = getComputedStyle(el);
+    const size = px(cs.fontSize);
+    const face = cs.fontFamily.split(",")[0].replace(/["']/g, "").trim();
+    const key = size + "|" + face;
+    if (scale.has(key)) continue;
+    scale.set(key, {
+      size,
+      face,
+      weight: cs.fontWeight,
+      ls: px(cs.letterSpacing),
+      text: (el.textContent || "").trim().slice(0, 24),
+    });
+  }
+  info.typeScale = [...scale.values()].sort((a, b) => b.size - a.size).slice(0, 14);
+
   info.surface = {
     tabs: document.querySelectorAll("[data-slot=tabs-trigger]").length,
     switches: document.querySelectorAll("[data-slot=switch]").length,

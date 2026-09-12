@@ -19,7 +19,9 @@ export default function SwitchRow({
 }: SwitchRowProps) {
   return (
     <div className="flex items-center justify-between gap-6">
-      <span className="text-[13px] leading-[1.5] text-olive">{label}</span>
+      <span className="font-sans text-[13px] leading-[1.5] text-olive">
+        {label}
+      </span>
       <Switch
         checked={checked}
         onCheckedChange={onCheckedChange}

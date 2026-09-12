@@ -47,7 +47,7 @@ function TabsTrigger({
       data-slot="tabs-trigger"
       className={cn(
         "inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 py-1.5",
-        "font-[family-name:var(--font-serif)] text-[13px] font-medium",
+        "font-[family-name:var(--font-serif)] text-[14px] font-medium",
         "text-stone transition-[background-color,color] duration-150 ease-[var(--ease-paper)]",
         "hover:bg-paper-sunk hover:text-ink-soft",
         "data-[state=active]:bg-navy data-[state=active]:text-[color:var(--primary-foreground)]",

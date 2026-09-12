@@ -71,7 +71,7 @@ export default function BreakScreenCard({
               style={{ backgroundColor: palette.background }}
             >
               <span
-                className="text-[12px] leading-none"
+                className="font-sans text-[12px] leading-none"
                 style={{ color: palette.text }}
               >
                 {t(palette.nameKey)}
@@ -103,7 +103,7 @@ export default function BreakScreenCard({
         </div>
         <p
           className={cn(
-            "text-[12px] leading-[1.5]",
+            "font-sans text-[12px] leading-[1.5]",
             lowContrast ? "text-destructive" : "text-stone",
           )}
         >
@@ -144,10 +144,10 @@ function ColorWell({
         )}
       />
       <span className="min-w-0">
-        <span className="block text-[13px] leading-none text-olive">
+        <span className="block font-sans text-[13px] leading-none text-olive">
           {label}
         </span>
-        <span className="tnum mt-1 block text-[12px] leading-none text-stone">
+        <span className="tnum mt-1 block font-sans text-[12px] leading-none text-stone">
           {value.toUpperCase()}
         </span>
       </span>

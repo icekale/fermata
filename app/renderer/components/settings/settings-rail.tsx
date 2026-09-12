@@ -104,7 +104,7 @@ export default function SettingsRail({
                 >
                   {group.icon}
                 </span>
-                <span className="tnum text-[12px] opacity-60">
+                <span className="tnum font-sans text-[12px] opacity-60">
                   {String(index + 1).padStart(2, "0")}
                 </span>
                 <span className="min-w-0 flex-1 truncate">
@@ -129,7 +129,7 @@ export default function SettingsRail({
                           });
                         }}
                         className={cn(
-                          "relative -ml-3 rounded-r-[6px] py-1 pl-3 text-left text-[12px]",
+                          "relative -ml-3 rounded-r-[6px] py-1 pl-3 text-left font-sans text-[13px]",
                           "transition-colors duration-150",
                           "outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-navy",
                           isCurrent

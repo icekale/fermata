@@ -29,6 +29,16 @@ _Settings: a numbered index over sections separated by orbit arcs._
 
 ### What is actually different
 
+- **The type has a scale now.** The reference runs 96 → 14 (a 7:1 span); the
+  first two builds of this ran 23 → 11 and looked like a form with nice colours
+  on it. There is now a 32px page head with a navy `01 · General` eyebrow and a
+  16px lede, over 17px section titles.
+- **Chinese ships with the app.** Noto Serif SC (which is Source Han Serif),
+  subsetted, 11MB for two weights. Without it Chinese fell through to Songti SC
+  — a print face at 13px, which is what made it look wrong — and on Windows there
+  was no Chinese serif at all.
+- **The serif stops at 14px.** Above it, serif; below, the system sans. That is
+  the reference's own floor, confirmed by measuring what it renders.
 - **Settings is a document, not a form.** 1040×800, two columns: a contents
   rail down the left (the four groups, and under the open one its sections as
   anchors with a scroll-spy), the page being read on the right. The content

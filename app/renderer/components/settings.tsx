@@ -19,6 +19,7 @@ import { toast } from "../toaster";
 import AdvancedCard from "./settings/advanced-card";
 import AudioCard from "./settings/audio-card";
 import { IconGlobe, IconWeek } from "./icons";
+import PageHead from "./settings/page-head";
 import VeilCard from "./settings/veil-card";
 import BreaksCard from "./settings/breaks-card";
 import SettingsSection from "./settings/settings-section";
@@ -190,7 +191,17 @@ export default function SettingsEl() {
           onSave={handleSave}
         />
         <div id={SCROLL_ID} className="min-h-0 flex-1 overflow-auto px-9 py-8">
-          <TabsContent value="break-settings" className="stagger m-0 space-y-7">
+          <TabsContent
+            value="break-settings"
+            className="stagger m-0 space-y-10"
+          >
+            <PageHead
+              index={1}
+              labelKey="nav.general"
+              titleKey="page.general.title"
+              ledeKey="page.general.lede"
+            />
+
             <BreaksCard
               settingsDraft={settingsDraft}
               onNotificationTypeChange={handleNotificationTypeChange}
@@ -224,11 +235,17 @@ export default function SettingsEl() {
           </TabsContent>
 
           <TabsContent value="working-hours" className="stagger m-0">
+            <PageHead
+              index={2}
+              labelKey="nav.hours"
+              titleKey="page.hours.title"
+              ledeKey="page.hours.lede"
+            />
+
             <SettingsSection
               id="sec-hours"
               icon={<IconWeek size={19} />}
               title={t("sec.hours.title")}
-              helperText={t("sec.hours.helper")}
               toggle={{
                 checked: settingsDraft.workingHoursEnabled,
                 onCheckedChange: (checked) =>
@@ -243,7 +260,14 @@ export default function SettingsEl() {
             </SettingsSection>
           </TabsContent>
 
-          <TabsContent value="customization" className="stagger m-0 space-y-7">
+          <TabsContent value="customization" className="stagger m-0 space-y-10">
+            <PageHead
+              index={3}
+              labelKey="nav.customization"
+              titleKey="page.customization.title"
+              ledeKey="page.customization.lede"
+            />
+
             <BreakScreenCard
               settingsDraft={settingsDraft}
               onPaletteChange={handlePaletteChange}
@@ -264,7 +288,14 @@ export default function SettingsEl() {
           </TabsContent>
 
           {processEnv.SNAP === undefined && (
-            <TabsContent value="system" className="stagger m-0 space-y-7">
+            <TabsContent value="system" className="stagger m-0 space-y-10">
+              <PageHead
+                index={4}
+                labelKey="nav.system"
+                titleKey="page.system.title"
+                ledeKey="page.system.lede"
+              />
+
               <SettingsSection
                 id="sec-language"
                 icon={<IconGlobe size={19} />}

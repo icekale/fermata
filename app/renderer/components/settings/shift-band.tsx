@@ -157,7 +157,7 @@ export default function ShiftBand({
           }}
           className={[
             "band-in absolute inset-y-[3px] flex items-center justify-center overflow-hidden rounded-[4px]",
-            "text-[11px] whitespace-nowrap select-none",
+            "font-sans text-[11px] whitespace-nowrap select-none",
             "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy",
             enabled
               ? "cursor-grab touch-none bg-navy text-[color:var(--primary-foreground)] active:cursor-grabbing"
@@ -248,7 +248,7 @@ export default function ShiftBand({
                       }}
                       aria-label={t(other.labelKey)}
                     />
-                    <span className="text-[12px] text-olive">
+                    <span className="font-sans text-[12px] text-olive">
                       {t(other.shortKey)}
                     </span>
                   </label>

@@ -48,7 +48,7 @@ export default function SettingsSection({
           <div className="min-w-0 flex-1">
             <h3 className="text-[17px] leading-[1.3] text-ink">{title}</h3>
             {helperText && (
-              <p className="mt-1.5 max-w-[52ch] text-[13px] leading-[1.55] text-stone">
+              <p className="mt-1.5 max-w-[52ch] text-[14px] leading-[1.55] text-stone">
                 {helperText}
               </p>
             )}
