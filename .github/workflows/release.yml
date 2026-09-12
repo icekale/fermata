@@ -81,6 +81,34 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           ## A draft, not a published release: the maintainer looks at the
-          ## three files before anyone can download them.
+          ## four files and the notes before anyone can download them.
           draft: true
+          generate_release_notes: true
+          ## The unsigned warning goes FIRST. A download page that does not say
+          ## this gets a bug report about SmartScreen instead of a bug report
+          ## about the app.
+          body: |
+            **Fermata** is a break timer that holds the note, then lets you continue.
+
+            A fork of [BreakTimer](https://github.com/tom-james-watson/breaktimer-app) by
+            [tom-james-watson](https://github.com/tom-james-watson). The product is his;
+            the visual world, the week ledger and the Chinese translation are this
+            fork's. It stays GPL-3.0-or-later because upstream is.
+
+            ## These builds are unsigned
+
+            No code-signing certificate is configured, so your OS will object:
+
+            - **Windows** — SmartScreen shows "Windows protected your PC". Click
+              *More info* -> *Run anyway*.
+            - **macOS** — Gatekeeper refuses an unnotarized app. Right-click -> *Open*,
+              or `xattr -dr com.apple.quarantine /Applications/Fermata.app` after
+              dragging it into Applications.
+            - **Linux** — the `.deb` and `.AppImage` are unaffected.
+
+            ## Known gaps
+
+            - The updater is **off**: it inherited upstream's release feed, and an
+              update check against it would replace Fermata with BreakTimer.
+            - macOS builds are arm64 only.
           files: artifacts/**/*
