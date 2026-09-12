@@ -1,0 +1,874 @@
+/* ============================================================================
+   BreakTimer — Paper & Ink
+   ----------------------------------------------------------------------------
+   The visual world comes from mole.fit (tw93's Tang brand tokens, which the
+   kami / luo / mole sites share): parchment and ink instead of grey chrome,
+   a serif that carries the content, hairlines instead of boxes, pills instead
+   of rectangles, and near-zero elevation.
+
+   Three rules this file exists to enforce:
+     1. Nothing is grey. Every neutral is warm, derived from parchment (#f5f4ed)
+        or ink (#141413). A cool grey next to parchment reads as a bug.
+     2. Depth is a hairline first. Shadows are warm-ink and low-alpha; a shadow
+        that reads as a shadow is too strong.
+     3. Content is set in serif. The system sans is kept for one job only:
+        uppercase micro-labels, where a serif at 11px with letterspacing goes
+        muddy. Numerals get tabular lining figures everywhere they change.
+   ========================================================================= */
+
+@import "tailwindcss";
+/* shadcn's enter/exit utilities (animate-in, fade-in-0, zoom-in-95 …). The
+   package was already a dependency but was never imported, so every popover
+   and dialog in the old app appeared by teleporting. */
+@import "tw-animate-css";
+
+/* ---------------------------------------------------------------------------
+   Type stacks.
+   Charter is the reference site's chosen face and ships on macOS; Georgia is
+   the cross-platform stand-in and is on every Windows box. CJK is deliberately
+   SERIF (Source Han / Songti): PingFang is a sans, and mixing it in would set
+   one sentence in two voices on the same line — the exact bug mole.fit went out
+   of its way to fix.
+
+   These live in a plain @theme block rather than @theme inline, because an
+   inline `--font-serif: var(--font-serif)` is a self-reference that resolves to
+   nothing.
+   ------------------------------------------------------------------------ */
+@theme {
+  /* Latin serif: Charter on macOS, Georgia everywhere else — Georgia has
+     shipped with Windows since 2000 and is the reference's own second choice.
+
+     CJK serif: Source Han / Noto first (Linux and anyone who installed them),
+     then Songti SC on macOS, then SimSun (宋体) and MingLiU for Windows. Windows
+     was the gap in the first pass — neither Songti SC nor Source Han is present
+     there, so Chinese text fell through to whatever generic `serif` happened to
+     resolve to, and on a machine that maps it to a sans the whole Chinese
+     interface would have quietly lost the typeface in two places at once:
+     no serif, and Latin and Han set from different families. */
+  --font-serif:
+    Charter, "Iowan Old Style", Georgia, "Source Han Serif SC",
+    "Noto Serif CJK SC", "Songti SC", STSong, SimSun, "宋体", "MingLiU",
+    "PMingLiU", "Liberation Serif", "DejaVu Serif", Palatino, serif;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    "JetBrains Mono", "SF Mono", ui-monospace, "Fira Code", Menlo, Consolas,
+    Monaco, monospace;
+}
+
+/* ---------------------------------------------------------------------------
+   Tokens — light ("parchment"). Names are paper words, not UI words, because
+   the whole point is that a control and the surface it sits on are the same
+   material at different depths.
+   ------------------------------------------------------------------------ */
+:root {
+  --paper: #f5f4ed; /* the page */
+  --paper-raised: #faf9f5; /* a sheet laid on the page: cards, popovers, dialogs */
+  --paper-sunk: #edebe1; /* a well pressed into the page: tracks, inputs */
+  --sand: #e8e6dc;
+
+  --ink: #141413; /* the text */
+  --ink-soft: #3d3d3a; /* headings that are not the page title */
+  --olive: #504e49; /* body prose */
+  --stone: #6b6a64; /* meta, labels, placeholders */
+
+  --rule: #d8d5c8; /* the visible hairline */
+  --rule-soft: #e4e1d6; /* a quieter hairline, for internal dividers */
+  --rule-faint: #edebe1; /* the faintest, for rhythm inside a block */
+
+  --navy: #1b365d; /* the one accent: brand, primary action, focus */
+  --navy-light: #2d5a8a;
+  --navy-tint: #eef2f7;
+  --navy-wash: rgba(27, 54, 93, 0.08);
+
+  --stamp: #a33327; /* printer's red: destructive, and "now" on the ledger */
+  --stamp-tint: #f7ece9;
+
+  --mole: #33302a; /* Mole's fur brown-black: the dark band, the veil */
+  --mole-ink: #f4f2ec;
+
+  --shadow-hairline: 0 1px 2px rgba(20, 19, 19, 0.05);
+  --shadow-sheet: 0 1px 3px rgba(20, 19, 19, 0.08);
+  --shadow-lift: 0 8px 24px rgba(20, 19, 19, 0.08);
+  --shadow-veil: 0 24px 60px rgba(20, 19, 19, 0.22);
+
+  /* shadcn semantic layer, remapped onto the paper palette so every existing
+     `bg-card` / `text-muted-foreground` reads in the new world without the
+     component having to know it changed. */
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--paper-raised);
+  --card-foreground: var(--ink);
+  --popover: var(--paper-raised);
+  --popover-foreground: var(--ink);
+  --primary: var(--navy);
+  --primary-foreground: var(--paper-raised);
+  --secondary: var(--sand);
+  --secondary-foreground: var(--ink-soft);
+  --muted: var(--paper-sunk);
+  --muted-foreground: var(--stone);
+  --accent: var(--navy-tint);
+  --accent-foreground: var(--navy);
+  --destructive: var(--stamp);
+  --border: var(--rule);
+  --input: var(--rule);
+  --ring: var(--navy);
+  --radius: 12px;
+
+  color-scheme: light;
+}
+
+/* ---------------------------------------------------------------------------
+   Ink reversal.
+   The dark theme is the same world printed the other way up: warm charcoal
+   paper, ivory ink, the same hairlines at low alpha. It is NOT a second
+   palette — every warm token keeps its hue and only swaps lightness, because
+   a cold dark mode next to the parchment one reads as two products.
+   ------------------------------------------------------------------------ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #1a1917;
+    --paper-raised: #232220;
+    --paper-sunk: #131211;
+    --sand: #2c2a27;
+
+    --ink: #f4f2ec;
+    --ink-soft: #e2dfd6;
+    --olive: #bdb9ad;
+    --stone: #8f8b80;
+
+    --rule: rgba(244, 242, 236, 0.16);
+    --rule-soft: rgba(244, 242, 236, 0.1);
+    --rule-faint: rgba(244, 242, 236, 0.06);
+
+    /* Navy is far too dark to read on charcoal; the dark theme takes the
+       brand's lighter step, which is the same hue at the lightness the
+       surface actually needs. */
+    --navy: #9dbcdf;
+    --navy-light: #b9d1ea;
+    --navy-tint: rgba(157, 188, 223, 0.12);
+    --navy-wash: rgba(157, 188, 223, 0.1);
+
+    --stamp: #e08e7c;
+    --stamp-tint: rgba(224, 142, 124, 0.12);
+
+    --mole: #f4f2ec;
+    --mole-ink: #1a1917;
+
+    --shadow-hairline: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-sheet: 0 1px 3px rgba(0, 0, 0, 0.5);
+    --shadow-lift: 0 8px 24px rgba(0, 0, 0, 0.45);
+    --shadow-veil: 0 24px 60px rgba(0, 0, 0, 0.6);
+
+    --primary-foreground: #14161c;
+
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-paper-sunk: var(--paper-sunk);
+  --color-sand: var(--sand);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-olive: var(--olive);
+  --color-stone: var(--stone);
+  --color-rule: var(--rule);
+  --color-rule-soft: var(--rule-soft);
+  --color-rule-faint: var(--rule-faint);
+  --color-navy: var(--navy);
+  --color-navy-light: var(--navy-light);
+  --color-navy-tint: var(--navy-tint);
+  --color-stamp: var(--stamp);
+  --color-stamp-tint: var(--stamp-tint);
+  --color-mole: var(--mole);
+  --color-mole-ink: var(--mole-ink);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --shadow-hairline: var(--shadow-hairline);
+  --shadow-sheet: var(--shadow-sheet);
+  --shadow-lift: var(--shadow-lift);
+  --shadow-veil: var(--shadow-veil);
+}
+
+/* ---------------------------------------------------------------------------
+   Base
+   ------------------------------------------------------------------------ */
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  html {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background-color: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Safari/Electron paint the elastic-overscroll from the root; keeping it on
+       paper means a rubber-band never flashes a different surface. */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #root {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #container {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Headings inherit the content face and colour rather than the browser's
+     defaults; the paper world never sets a heading in sans by accident. */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: inherit;
+    color: var(--ink);
+    font-weight: 500;
+    margin: 0;
+  }
+
+  /* Keyboard focus is a navy hairline offset from the control, never the
+     browser's blue ring — and never removed. */
+  :focus-visible {
+    outline: 2px solid var(--navy);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: var(--navy-wash);
+    color: var(--ink);
+  }
+
+  /* Quiet scrollbars: on a paper surface the OS default is a grey slab. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--rule) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--rule);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--stone);
+    background-clip: content-box;
+  }
+
+  input,
+  textarea,
+  button,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Primitives
+   ------------------------------------------------------------------------ */
+
+/* Uppercase micro-label: the one job the system sans keeps. 11px is the floor;
+   below it letterspaced caps stop being readable and start being texture. */
+.u-label {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 590;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--stone);
+  line-height: 1;
+}
+
+/* Every number that ticks, counts, or aligns in a column. Without this the
+   countdown reflows by a pixel a second and the ledger columns wobble. */
+.tnum {
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings:
+    "lnum" 1,
+    "tnum" 1;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* A hairline that spans its container. Used instead of a border on the parent
+   so the rule can sit at a section's optical top rather than its box top. */
+.rule {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 0;
+}
+
+/* The well: anything the user types into or drags on. Pressed into the page
+   rather than raised off it, which is why it is *sunk* paper and not white. */
+.well {
+  background: var(--paper-sunk);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+}
+
+/* The sheet: a card. One hairline, one whisper of shadow, no gradient. */
+.sheet {
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+}
+
+/* Prose default for any block of running text in the app. */
+.prose-paper {
+  color: var(--olive);
+  line-height: 1.6;
+}
+
+/* ---------------------------------------------------------------------------
+   The break sheet's own button.
+
+   It cannot use the Button component: the sheet's colours come from the
+   user's chosen palette, so the control has to be drawn in `currentColor`
+   rather than in the app's navy. Same pill, same hairline, ink from context.
+   ------------------------------------------------------------------------ */
+/* ---------------------------------------------------------------------------
+   The break sheet.
+
+   Full-bleed was the first instinct and it is wrong on a wide display: on a
+   3440px monitor the sheet measured 3312px across, the countdown sat alone in
+   the middle of it and the two labels at the head of the page ended up a metre
+   apart. A page has a measure. Capping the sheet keeps the composition the
+   same on every screen — what changes is how much desk you can see around it,
+   which is the veil's job anyway.
+   ------------------------------------------------------------------------ */
+.break-sheet {
+  container-type: size;
+  width: 100%;
+  max-width: 1120px;
+  height: 100%;
+  max-height: 820px;
+  margin-inline: auto;
+}
+
+/* The countdown is sized against the SHEET, not the screen. A break on a
+   3440px display and a break in a 540px floating card are the same page at two
+   scales, so the numeral has to be a fraction of the page it sits on; cqmin
+   ties it to the container, and the clamp keeps it sane at both ends. */
+.break-clock {
+  font-size: clamp(56px, 24cqmin, 220px);
+}
+
+.sheet-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 22px;
+  border-radius: 999px;
+  border: 1.5px solid color-mix(in srgb, currentColor 40%, transparent);
+  background: transparent;
+  font-family: var(--font-serif);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 0.15s var(--ease-paper),
+    border-color 0.15s var(--ease-paper),
+    transform 0.15s var(--ease-paper);
+}
+.sheet-button:hover {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  border-color: color-mix(in srgb, currentColor 70%, transparent);
+  transform: translateY(-1px);
+}
+.sheet-button:active {
+  transform: translateY(0);
+}
+.sheet-button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+/* ---------------------------------------------------------------------------
+   Motion, in full.
+
+   Four moves, and every one of them is a fact about the product rather than a
+   decoration on it. The first pass at this app had almost no motion, on the
+   principle that a break reminder should not waste your time — which was the
+   right instinct applied far too broadly: a page that never moves reads as a
+   dead page, and stillness is not the same thing as calm. Slow is calm.
+   ------------------------------------------------------------------------ */
+
+/* 1. Sections ink in, staggered, when a tab is opened.
+   The delay ladder is what makes it read as ONE page arriving rather than six
+   elements appearing at once, and it is short enough that a reader who came
+   here to change one setting never waits on it. */
+@keyframes section-in {
+  from {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.stagger > * {
+  animation: section-in 0.44s var(--ease-paper) both;
+}
+.stagger > *:nth-child(1) {
+  animation-delay: 0ms;
+}
+.stagger > *:nth-child(2) {
+  animation-delay: 55ms;
+}
+.stagger > *:nth-child(3) {
+  animation-delay: 110ms;
+}
+.stagger > *:nth-child(4) {
+  animation-delay: 165ms;
+}
+.stagger > *:nth-child(5) {
+  animation-delay: 220ms;
+}
+.stagger > *:nth-child(6) {
+  animation-delay: 275ms;
+}
+
+/* 2. The week draws itself.
+   Each day's shift band wipes in from the left, one day after another, so
+   opening Working Hours looks like a hand ruling the week across the page. A
+   clip reveal, not a scale: scaling the band would squash the times inside it. */
+@keyframes band-in {
+  from {
+    clip-path: inset(0 100% 0 0 round 4px);
+  }
+  to {
+    clip-path: inset(0 0 0 0 round 4px);
+  }
+}
+
+.band-in {
+  animation: band-in 0.5s var(--ease-paper) both;
+}
+.stagger-days > *:nth-child(1) .band-in {
+  animation-delay: 60ms;
+}
+.stagger-days > *:nth-child(2) .band-in {
+  animation-delay: 105ms;
+}
+.stagger-days > *:nth-child(3) .band-in {
+  animation-delay: 150ms;
+}
+.stagger-days > *:nth-child(4) .band-in {
+  animation-delay: 195ms;
+}
+.stagger-days > *:nth-child(5) .band-in {
+  animation-delay: 240ms;
+}
+.stagger-days > *:nth-child(6) .band-in {
+  animation-delay: 285ms;
+}
+.stagger-days > *:nth-child(7) .band-in {
+  animation-delay: 330ms;
+}
+
+/* 3. The mark draws its own arch.
+   The Fermata glyph on the masthead and on the title page is stroked on, the
+   way the shape would be ruled onto paper, with the dot dropped in at the end. */
+@keyframes arch-draw {
+  from {
+    stroke-dashoffset: 30;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes dot-drop {
+  from {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.mark-arch {
+  stroke-dasharray: 30;
+  animation: arch-draw 0.7s var(--ease-paper) both;
+}
+.mark-dot {
+  transform-origin: center;
+  animation: dot-drop 0.4s var(--ease-paper) 0.52s both;
+}
+
+/* 4. "Now" is alive.
+   The stamp dot on today's ledger row is the only thing on the page that is
+   moving on its own clock rather than on the reader's, so it is the only thing
+   that gets a pulse. Very slow, very shallow — a pulse you notice is a pulse
+   that has become a notification. */
+@keyframes now-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: translateX(-50%) scale(0.72);
+  }
+}
+.now-dot {
+  animation: now-pulse 3.4s var(--ease-paper) infinite;
+}
+
+/* The star that rides the break sheet's progress rule: the same 4px mark as the
+   orbit dividers, sitting at the point in time the reader has reached. */
+.progress-star {
+  animation: star-breathe 2.8s var(--ease-paper) infinite;
+}
+@keyframes star-breathe {
+  0%,
+  100% {
+    opacity: 0.85;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: translate(-50%, -50%) scale(0.7);
+  }
+}
+
+/* 5. The notice slip is laid down, not faded in.
+   A small overshoot, 45ms past the resting position, which is the difference
+   between a piece of paper being set on a desk and a rectangle fading up. */
+@keyframes slip-land {
+  0% {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.985);
+  }
+  62% {
+    opacity: 1;
+    transform: translateY(2px) scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+.slip-land {
+  animation: slip-land 0.44s var(--ease-paper) both;
+}
+
+/* ---------------------------------------------------------------------------
+   The orbit.
+
+   This is the one device that is unmistakably the reference's, and the first
+   pass at this app did not have it: it used a straight `border-top`, which is
+   generic editorial and belongs to any magazine.
+
+   On mole.fit, sections separate with a faint quadratic arc, and a 4.4px star
+   drifts along that arc — slowly, 30 to 140 seconds, with a different phase per
+   row so the stars never line up. It reads as a ruled line until you notice the
+   star, and then the whole page is quietly in motion.
+
+   Two details are load-bearing and both are borrowed deliberately:
+     - The star's keyframes SAMPLE the curve every 12.5%. Twenty-five-percent
+       steps let the linear segments sag about 0.4px below the arc and the star
+       visibly hangs off its own orbit.
+     - The arc is a mask, not a background image. A background SVG cannot carry
+       a CSS variable, so the arc would have to hard-code its colour and the
+       dark theme would be wrong. The mask lets the stroke be `--rule`.
+   ------------------------------------------------------------------------ */
+.orbit {
+  position: relative;
+  height: 16px;
+}
+
+.orbit::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: var(--rule);
+  -webkit-mask: var(--orbit-arc) no-repeat center / 100% 100%;
+  mask: var(--orbit-arc) no-repeat center / 100% 100%;
+}
+
+.orbit::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  /* Ink at just over a quarter, so the star is a mark on the line rather than a
+     thing on the page. It is deliberately NOT navy: navy at this alpha over
+     parchment resolves to a cool blue-grey, which is the one thing this palette
+     does not do — the same defect the section seals had. Ink at 28% is a warm
+     speck, which is what the reference's own star is. */
+  background: color-mix(in srgb, var(--ink) 28%, transparent);
+  animation: orbit-drift 96s linear infinite;
+}
+
+:root {
+  --orbit-arc: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 16' preserveAspectRatio='none'%3E%3Cpath d='M0,14 Q300,-8 600,14' fill='none' stroke='%23fff' stroke-width='1'/%3E%3C/svg%3E");
+}
+
+/* The arc rises 11px from its ends to its apex. Each stop is the sampled
+   curve minus half the star, so the star's centre sits ON the line. */
+@keyframes orbit-drift {
+  0% {
+    left: 0;
+    transform: translate(-50%, 12px);
+  }
+  12.5% {
+    left: 12.5%;
+    transform: translate(-50%, 7.2px);
+  }
+  25% {
+    left: 25%;
+    transform: translate(-50%, 3.8px);
+  }
+  37.5% {
+    left: 37.5%;
+    transform: translate(-50%, 1.7px);
+  }
+  50% {
+    left: 50%;
+    transform: translate(-50%, 1px);
+  }
+  62.5% {
+    left: 62.5%;
+    transform: translate(-50%, 1.7px);
+  }
+  75% {
+    left: 75%;
+    transform: translate(-50%, 3.8px);
+  }
+  87.5% {
+    left: 87.5%;
+    transform: translate(-50%, 7.2px);
+  }
+  100% {
+    left: 100%;
+    transform: translate(-50%, 12px);
+  }
+}
+
+/* A section's star borrows the pace the app's own planets spin at, so the
+   dividers are not all on the same clock, and the phases are negative so every
+   star is already mid-orbit on the first frame instead of all starting at the
+   left edge together. Six speeds, cycling, so no two adjacent rows match. */
+.stagger > section:nth-child(6n + 1) .orbit::after {
+  animation-duration: 74s;
+  animation-delay: -12s;
+}
+.stagger > section:nth-child(6n + 2) .orbit::after {
+  animation-duration: 132s;
+  animation-delay: -44s;
+}
+.stagger > section:nth-child(6n + 3) .orbit::after {
+  animation-duration: 30s;
+  animation-delay: -21s;
+}
+.stagger > section:nth-child(6n + 4) .orbit::after {
+  animation-duration: 108s;
+  animation-delay: -67s;
+}
+.stagger > section:nth-child(6n + 5) .orbit::after {
+  animation-duration: 46s;
+  animation-delay: -33s;
+}
+.stagger > section:nth-child(6n + 6) .orbit::after {
+  animation-duration: 156s;
+  animation-delay: -88s;
+}
+
+/* The first section has nothing above it to be divided from, so its orbit would
+   be an arc drawn under the top edge for no reason. */
+.stagger > section:first-child .orbit {
+  display: none;
+}
+.stagger > section:first-child .section-body {
+  padding-top: 0;
+}
+
+/* The seal: a section's glyph on a tint of the accent. Not a bordered box —
+   the reference's own rule is hairlines for structure and tint for grouping,
+   and a tinted square is a stamp rather than a container. */
+.seal {
+  display: flex;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  /* Warm sand, not navy-tint. Navy-tint is the reference's own `--brand-tint`
+     and it is right for the moment it was drawn for — a button on hover, a row
+     while it is selected. As a PERMANENT surface on eleven sections it became
+     the only cold thing on the page, repeated eleven times, which is the one
+     thing this palette does not do. Sand is the same depth of quiet and it is
+     warm; the navy glyph still carries the accent. */
+  background: var(--sand);
+  color: var(--navy);
+  transition: background-color 0.2s var(--ease-paper);
+}
+
+/* ---------------------------------------------------------------------------
+   Motion
+   Two curves only. `--ease-paper` for anything that settles (the app's own
+   voice), `--ease-out` for anything that leaves. Duration stays under 300ms;
+   a settings window that animates for longer than that is stealing time.
+   ------------------------------------------------------------------------ */
+:root {
+  --ease-paper: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@keyframes ink-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes veil-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.animate-ink-in {
+  animation: ink-in 0.32s var(--ease-paper) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Toasts.
+   Sonner paints from inline styles, so this has to beat them; a stylesheet in
+   a later layer does, and it keeps the four `important` flags out of the
+   component. Shape and face only — colour comes from sonner's own variables,
+   which the Toaster component points at the paper tokens.
+   ------------------------------------------------------------------------ */
+[data-sonner-toast] {
+  font-family: var(--font-serif);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--rule);
+  background: var(--paper-raised);
+  color: var(--ink);
+  box-shadow: var(--shadow-lift);
+}
+[data-sonner-toast] [data-description] {
+  color: var(--stone);
+}
+[data-sonner-toast] [data-button] {
+  font-family: var(--font-serif);
+  border-radius: 999px;
+}
+
+/* ---------------------------------------------------------------------------
+   Chinese.
+
+   Not a translation sheet bolted on: Chinese sets differently, and two of the
+   differences are the kind that look like bugs when they are missed.
+
+   - Line height goes up. Han characters are square and dense, so a leading that
+     suits Latin prose crowds them; the reference site runs 1.75 for zh against
+     1.55 for Latin and the same is true of a settings window.
+   - `text-wrap: balance` is switched OFF for balanced headings. With no word
+     spaces to break at, a balancer will happily split a phrase mid-word to even
+     two lines — on the reference it split a counter across two lines and read
+     as a typo.
+
+   Latin words inside Chinese text stay in Charter, because the serif stack puts
+   Charter first and Chinese faces only carry the Han ranges. That is deliberate:
+   one sentence, two faces, each doing what it is good at.
+   ------------------------------------------------------------------------ */
+html[lang^="zh"] body {
+  line-height: 1.75;
+}
+
+/* Uppercase does not exist in Han, so a micro-label has only tracking to
+   separate it from the prose around it. */
+html[lang^="zh"] .u-label {
+  letter-spacing: 0.16em;
+  /* The 11px floor is a Latin floor. Han characters carry far more strokes per
+     em, so the same nominal size reads as roughly two steps smaller; Chinese
+     micro-labels get 12px and stay at the same visual weight. */
+  font-size: 12px;
+}
+
+html[lang^="zh"] :is(h1, h2, h3, .u-label, .break-clock) {
+  text-wrap: wrap;
+}

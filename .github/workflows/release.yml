@@ -1,0 +1,86 @@
+name: Release
+
+## Upstream builds its releases by hand from three machines (see DEVELOPMENT.md).
+## This fork cannot: nobody is going to sit at a Windows box every time the rail
+## moves a pixel, and "there is no Windows version" is the predictable result.
+## So the three desktop targets are built here, on a tag, and attached to the
+## release.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: macos-arm64
+            args: --mac --arm64 --config.mac.identity=null
+            glob: release/*.dmg
+          - os: windows-latest
+            name: windows-x64
+            args: --win --x64
+            glob: release/*.exe
+          - os: ubuntu-latest
+            name: linux-x64
+            args: --linux --x64
+            glob: |
+              release/*.AppImage
+              release/*.deb
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.13.0"
+          cache: "npm"
+
+      - run: npm ci
+
+      ## The same gates CI runs on a pull request. A release that fails a test
+      ## should fail here rather than reach a download page.
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run lint
+      - run: npm run format-check
+
+      - run: npm run build
+
+      ## --publish never: electron-builder's `publish` field still points at the
+      ## upstream repo it was forked from, and an unattended publish there would
+      ## either fail or push this fork's build at upstream's users.
+      - name: Package
+        run: npx electron-builder build ${{ matrix.args }} --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.glob }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          ## A draft, not a published release: the maintainer looks at the
+          ## three files before anyone can download them.
+          draft: true
+          files: artifacts/**/*
