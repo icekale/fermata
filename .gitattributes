@@ -1,9 +1,53 @@
+# Upstream set `* text eol=lf` and then listed a handful of binary types. Every
+# binary type added since has to be listed too, or git will "helpfully" convert
+# its line endings and hand back a different file. This one did exactly that to
+# two 5.7MB font files: the stored blob came back 94 bytes shorter than the file
+# on disk, and a subsetted OpenType table with 94 bytes missing is a font that
+# does not load. `git diff` said nothing, because git thought they were text.
+#
+# The rule: any extension that is not source is binary. Adding an asset type
+# here is part of adding the asset.
 * text eol=lf
+
+# images
 *.png binary
 *.jpg binary
 *.jpeg binary
+*.gif binary
+*.webp binary
 *.ico binary
 *.icns binary
+*.car binary
+*.svg text eol=lf
+
+# fonts
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.ttc binary
+
+# audio
 *.wav binary
 *.mp3 binary
 *.ogg binary
+*.m4a binary
+
+# archives and installers
+*.zip binary
+*.gz binary
+*.tar binary
+*.7z binary
+*.dmg binary
+*.exe binary
+*.msi binary
+*.deb binary
+*.rpm binary
+*.snap binary
+*.AppImage binary
+
+# misc
+*.pdf binary
+*.wasm binary
+*.node binary
+*.sqlite binary
