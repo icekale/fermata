@@ -19,6 +19,18 @@
 
   const noop = async () => {};
 
+  /* Phase 2 audio: the wavs ship with the frontend, so the bridge plays them
+     with a plain Audio element — the same files the Electron sounds window
+     used, no native audio crate needed. */
+  const playSound = (type, isStart, volume = 1) => {
+    if (!type || type === "NONE") return;
+    const el = new Audio(
+      `./sounds/${String(type).toLowerCase()}_${isStart ? "start" : "end"}.wav`,
+    );
+    el.volume = Math.max(0, Math.min(1, volume));
+    el.play().catch(() => {});
+  };
+
   window.ipcRenderer = {
     invokeGetSettings: () => invoke("get_settings"),
     invokeSetSettings: (settings) => invoke("set_settings", { settings }),
@@ -39,9 +51,8 @@
     invokeBreakPostpone: (action) => invoke("break_postpone", { action }),
     invokeBreakWindowResize: () => invoke("break_window_resize"),
     invokeCompleteBreakTracking: (ms) => invoke("complete_break_tracking", { ms }),
-    /* Phase 2: audio. Resolving silently is a documented gap, not behaviour. */
-    invokeStartSound: noop,
-    invokeEndSound: noop,
+    invokeStartSound: (type, volume = 1) => playSound(type, true, volume),
+    invokeEndSound: (type, volume = 1) => playSound(type, false, volume),
 
     onBreakStart: (cb) => listen("BREAK_START", (event) => cb(event.payload)),
     onBreakEnd: (cb) => listen("BREAK_END", () => cb()),

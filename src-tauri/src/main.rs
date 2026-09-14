@@ -11,6 +11,7 @@ use std::sync::Mutex;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, LogicalSize, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_autostart::ManagerExt;
 
 /* ------------------------------------------------------------------ */
 /* Settings — serde mirror of app/types/settings.ts, defaults included */
@@ -196,6 +197,12 @@ struct AppState {
     last_break_at: Mutex<Option<i64>>,
     having_break: Mutex<bool>,
     initialized: Mutex<bool>,
+    /* Notice shown for the pending break (its windows are open). */
+    notice_shown: Mutex<bool>,
+    /* Smart Breaks: an over-threshold idle was already counted as a rest. */
+    idle_counted: Mutex<bool>,
+    /* Snoozes since the last taken break, against postponeLimit. */
+    postpone_count: Mutex<u32>,
 }
 
 #[derive(serde::Serialize)]
@@ -237,6 +244,9 @@ fn load_state(app: &tauri::AppHandle) -> AppState {
         last_break_at: Mutex::new(None),
         having_break: Mutex::new(false),
         initialized: Mutex::new(initialized),
+        notice_shown: Mutex::new(false),
+        idle_counted: Mutex::new(false),
+        postpone_count: Mutex::new(0),
     }
 }
 
@@ -283,22 +293,95 @@ fn is_zh(s: &Settings) -> bool {
     tag.starts_with("zh")
 }
 
+/* System idle seconds. The CGEventSource call is the same thing
+   powerMonitor.getSystemIdleTime wraps, straight over the FFI so no extra
+   crate rides along. macOS only for now; Windows/Linux land with phase 3. */
+#[cfg(target_os = "macos")]
+fn system_idle_secs() -> u64 {
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGEventSourceSecondsSinceLastEventType(state: i32, mask: u64) -> f64;
+    }
+    /* kCGEventSourceStateHIDSystemState = 1, kCGAnyInputEventType = ~0 */
+    unsafe { CGEventSourceSecondsSinceLastEventType(1, u64::MAX).max(0.0) as u64 }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn system_idle_secs() -> u64 {
+    0
+}
+
 /* ------------------------------------------------------------------ */
 /* Break flow                                                          */
 /* ------------------------------------------------------------------ */
 
+const NOTICE_LEAD_MS: i64 = 120_000;
+
+fn break_windows(app: &tauri::AppHandle) -> Vec<tauri::WebviewWindow> {
+    let mut wins: Vec<tauri::WebviewWindow> = app
+        .webview_windows()
+        .into_iter()
+        .filter(|(label, _)| label.starts_with("break"))
+        .map(|(_, win)| win)
+        .collect();
+    wins.sort_by_key(|w| w.label().to_string());
+    wins
+}
+
+fn close_break_windows(app: &tauri::AppHandle) {
+    for win in break_windows(app) {
+        let _ = win.close();
+    }
+}
+
+/* The notice slip: one small window per display, top-centre. */
+fn show_notice(app: &tauri::AppHandle) {
+    let monitors = match app.available_monitors() {
+        Ok(m) => m,
+        Err(_) => return,
+    };
+    for (i, monitor) in monitors.iter().enumerate() {
+        let label = format!("break-{i}");
+        if app.get_webview_window(&label).is_some() {
+            continue;
+        }
+        let pos = monitor.position();
+        let size = monitor.size();
+        let x = pos.x as f64 + (size.width as f64 - 540.0) / 2.0;
+        let y = pos.y as f64 + 50.0;
+        let win = WebviewWindowBuilder::new(
+            app,
+            label.clone(),
+            WebviewUrl::App(format!("index.html?page=break&windowId={i}").into()),
+        )
+        .inner_size(540.0, 100.0)
+        .position(x, y)
+        .visible(true)
+        .decorations(false)
+        .resizable(false)
+        .always_on_top(true)
+        .skip_taskbar(true);
+        if let Err(err) = win.build() {
+            eprintln!("notice window {label}: {err}");
+        }
+    }
+}
+
 fn start_break(app: &tauri::AppHandle) {
     let state = app.state::<AppState>();
+    if *state.having_break.lock().unwrap() {
+        return; /* The renderer's countdown and the heartbeat can race. */
+    }
     let length = state.settings.lock().unwrap().break_length_seconds as i64;
     let end_at = Local::now().timestamp_millis() + length * 1000;
     *state.break_end_at.lock().unwrap() = Some(end_at);
     *state.having_break.lock().unwrap() = true;
     *state.next_break_at.lock().unwrap() = None;
+    *state.notice_shown.lock().unwrap() = false;
+    *state.postpone_count.lock().unwrap() = 0;
+    /* Every break window flips to the sheet itself: it calls
+       break_window_resize, which fullscreens it on its own display. */
     let _ = app.emit("BREAK_START", end_at);
-    if let Some(win) = app.get_webview_window("break") {
-        let _ = win.set_fullscreen(true);
-        let _ = win.show();
-    }
     update_tray_title(app);
 }
 
@@ -307,18 +390,18 @@ fn end_break(app: &tauri::AppHandle) {
     *state.having_break.lock().unwrap() = false;
     *state.break_end_at.lock().unwrap() = None;
     *state.last_break_at.lock().unwrap() = Some(Local::now().timestamp_millis());
+    *state.postpone_count.lock().unwrap() = 0;
     let freq = state.settings.lock().unwrap().break_frequency_seconds as i64;
     *state.next_break_at.lock().unwrap() = Some(Local::now().timestamp_millis() + freq * 1000);
     let _ = app.emit("BREAK_END", ());
-    if let Some(win) = app.get_webview_window("break") {
-        let _ = win.hide();
-        let _ = win.set_fullscreen(false);
-    }
+    close_break_windows(app);
     update_tray_title(app);
 }
 
-/* The schedule heartbeat: schedule when idle, fire when due, end when due. */
+/* The schedule heartbeat: open the notice slip at T-2min, fire at T, end at
+   the break's end, and let Smart Breaks credit over-threshold idling. */
 fn tick(app: &tauri::AppHandle) {
+    let due;
     {
         let state = app.state::<AppState>();
         let s = state.settings.lock().unwrap().clone();
@@ -330,27 +413,63 @@ fn tick(app: &tauri::AppHandle) {
             if end.is_some_and(|e| now >= e) {
                 drop(state);
                 end_break(app);
-                return;
             }
             return;
         }
         if !s.breaks_enabled || !in_working_hours(&s, Local::now()) {
             *state.next_break_at.lock().unwrap() = None;
+            let was_shown = *state.notice_shown.lock().unwrap();
+            *state.notice_shown.lock().unwrap() = false;
+            drop(state);
+            if was_shown {
+                close_break_windows(app);
+            }
             return;
         }
+
+        /* Smart Breaks: idle past the threshold counts as the rest taken. */
+        if s.idle_reset_enabled {
+            let idle_secs = system_idle_secs();
+            let threshold = s.idle_reset_length_seconds as u64;
+            let mut counted = state.idle_counted.lock().unwrap();
+            if idle_secs >= threshold && !*counted {
+                *counted = true;
+                *state.last_break_at.lock().unwrap() = Some(now);
+                let mut next = state.next_break_at.lock().unwrap();
+                *next = Some(now + s.break_frequency_seconds as i64 * 1000);
+                drop(next);
+                *state.notice_shown.lock().unwrap() = false;
+                drop(counted);
+                close_break_windows(app);
+                return;
+            }
+            if idle_secs < threshold {
+                *counted = false;
+            }
+        }
+
         let mut next = state.next_break_at.lock().unwrap();
         match *next {
-            Some(at) if now >= at => {
-                *next = None;
+            Some(fire_at) => {
+                *state.notice_shown.lock().unwrap() = now >= fire_at - NOTICE_LEAD_MS;
+                due = now >= fire_at;
             }
             None => {
                 *next = Some(now + s.break_frequency_seconds as i64 * 1000);
                 return;
             }
-            _ => return,
         }
     }
-    start_break(app);
+    if due {
+        start_break(app);
+    } else {
+        let state = app.state::<AppState>();
+        let shown = *state.notice_shown.lock().unwrap();
+        drop(state);
+        if shown {
+            show_notice(app);
+        }
+    }
 }
 
 fn tray_title(state: &State<AppState>) -> Option<String> {
@@ -448,21 +567,6 @@ fn build_popover(app: &tauri::AppHandle) -> tauri::Result<()> {
     .map(|_| ())
 }
 
-fn build_break(app: &tauri::AppHandle) -> tauri::Result<()> {
-    WebviewWindowBuilder::new(
-        app,
-        "break",
-        WebviewUrl::App("index.html?page=break&windowId=0".into()),
-    )
-    .inner_size(1200.0, 800.0)
-    .visible(false)
-    .decorations(false)
-    .resizable(false)
-    .skip_taskbar(true)
-    .build()
-    .map(|_| ())
-}
-
 /* ------------------------------------------------------------------ */
 /* Commands                                                            */
 /* ------------------------------------------------------------------ */
@@ -474,8 +578,17 @@ fn get_settings(state: State<'_, AppState>) -> Settings {
 
 #[tauri::command]
 fn set_settings(app: tauri::AppHandle, state: State<'_, AppState>, settings: Settings) {
+    let old_auto_launch = state.settings.lock().unwrap().auto_launch;
     save_settings(&app, &settings);
     *state.settings.lock().unwrap() = settings.clone();
+    if old_auto_launch != settings.auto_launch {
+        let auto = app.autolaunch();
+        let _ = if settings.auto_launch {
+            auto.enable()
+        } else {
+            auto.disable()
+        };
+    }
     if !settings.breaks_enabled {
         *state.next_break_at.lock().unwrap() = None;
     }
@@ -525,7 +638,9 @@ fn get_break_length(state: State<'_, AppState>) -> u32 {
 
 #[tauri::command]
 fn get_allow_postpone(state: State<'_, AppState>) -> bool {
-    state.settings.lock().unwrap().postpone_break_enabled
+    let s = state.settings.lock().unwrap();
+    let count = *state.postpone_count.lock().unwrap();
+    s.postpone_break_enabled && (s.postpone_limit == 0 || count < s.postpone_limit)
 }
 
 #[tauri::command]
@@ -562,13 +677,12 @@ fn break_postpone(app: tauri::AppHandle, state: State<'_, AppState>, _action: St
     let postpone = state.settings.lock().unwrap().postpone_length_seconds as i64;
     *state.having_break.lock().unwrap() = false;
     *state.break_end_at.lock().unwrap() = None;
+    *state.notice_shown.lock().unwrap() = false;
+    *state.postpone_count.lock().unwrap() += 1;
     *state.next_break_at.lock().unwrap() =
         Some(Local::now().timestamp_millis() + postpone * 1000);
     let _ = app.emit("BREAK_END", ());
-    if let Some(win) = app.get_webview_window("break") {
-        let _ = win.hide();
-        let _ = win.set_fullscreen(false);
-    }
+    close_break_windows(&app);
     update_tray_title(&app);
 }
 
@@ -603,7 +717,7 @@ fn resize_tray_popover(app: tauri::AppHandle, height: f64) {
 }
 
 #[tauri::command]
-fn break_window_resize(app: tauri::AppHandle, window: tauri::Window) {
+fn break_window_resize(_app: tauri::AppHandle, window: tauri::Window) {
     if let Some(monitor) = window.current_monitor().ok().flatten() {
         let pos = monitor.position();
         let size = monitor.size();
@@ -618,7 +732,12 @@ fn complete_break_tracking(_ms: f64) {}
 
 #[tauri::command]
 fn close_current_window(window: tauri::Window) {
-    let _ = window.hide();
+    /* Break windows are recreated per break; other surfaces just hide. */
+    if window.label().starts_with("break") {
+        let _ = window.close();
+    } else {
+        let _ = window.hide();
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -686,6 +805,10 @@ fn on_tray_menu(app: &tauri::AppHandle, id: &str) {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .invoke_handler(tauri::generate_handler![
             get_settings,
             set_settings,
@@ -718,8 +841,19 @@ fn main() {
             };
             app.manage(state);
 
+            /* Keep the OS login item in step with the stored setting. */
+            {
+                let state = handle.state::<AppState>();
+                let auto = state.settings.lock().unwrap().auto_launch;
+                let autolaunch = handle.autolaunch();
+                let _ = if auto {
+                    autolaunch.enable()
+                } else {
+                    autolaunch.disable()
+                };
+            }
+
             build_popover(&handle)?;
-            build_break(&handle)?;
             if first_run {
                 open_settings(&handle)?;
             }
@@ -741,7 +875,7 @@ fn main() {
             menu.append(&settings)?;
             menu.append(&quit)?;
 
-            let mut tray = TrayIconBuilder::with_id("main")
+            let tray = TrayIconBuilder::with_id("main")
                 .icon(
                     tauri::image::Image::from_bytes(include_bytes!(
                         "../../resources/icon.png"
@@ -755,10 +889,43 @@ fn main() {
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
                         button_state: MouseButtonState::Up,
+                        rect,
                         ..
                     } = event
                     {
-                        show_popover(tray.app_handle());
+                        /* Anchor the popover under the tray icon, not in the
+                           middle of the screen where Tauri puts new windows. */
+                        let handle = tray.app_handle();
+                        if let Some(popover) = handle.get_webview_window("popover") {
+                            let scale = popover.scale_factor().unwrap_or(2.0);
+                            /* rect.position / rect.size arrive as Position/Size
+                               enums; the tray rect is physical pixels. */
+                            let (rx, ry, rw, rh) = match (rect.position, rect.size) {
+                                (
+                                    tauri::Position::Physical(p),
+                                    tauri::Size::Physical(s),
+                                ) => (
+                                    p.x as f64,
+                                    p.y as f64,
+                                    s.width as f64,
+                                    s.height as f64,
+                                ),
+                                (
+                                    tauri::Position::Logical(p),
+                                    tauri::Size::Logical(s),
+                                ) => (p.x, p.y, s.width, s.height),
+                                _ => (0.0, 0.0, 0.0, 0.0),
+                            };
+                            let width = 340.0 * scale;
+                            let cx = rx + rw / 2.0;
+                            let x = cx - width / 2.0;
+                            let y = ry + rh + 6.0;
+                            let _ = popover.set_position(tauri::PhysicalPosition::new(
+                                x as i32,
+                                y as i32,
+                            ));
+                        }
+                        show_popover(handle);
                     }
                 })
                 .build(&handle)?;
@@ -778,12 +945,20 @@ fn main() {
 
             Ok(())
         })
-        .on_window_event(|window, event| {
+        .on_window_event(|window, event| match event {
             /* Closing a window hides it: the app lives in the tray. */
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            tauri::WindowEvent::CloseRequested { api, .. } => {
                 let _ = window.hide();
                 api.prevent_close();
             }
+            /* The popover dismisses like every menu-bar popover: a click
+               anywhere else takes focus away, and that is the exit. */
+            tauri::WindowEvent::Focused(false) => {
+                if window.label() == "popover" {
+                    let _ = window.hide();
+                }
+            }
+            _ => {}
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
