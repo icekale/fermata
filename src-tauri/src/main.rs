@@ -385,33 +385,40 @@ fn break_windows(app: &tauri::AppHandle) -> Vec<tauri::WebviewWindow> {
     wins
 }
 
+/* Break windows are PERSISTENT: created on first use, hidden at the end of
+   every break, shown again for the next one. They are never closed and
+   never destroyed.
+
+   The teardown is two-phase on purpose: macOS's fullscreen EXIT restores
+   the window's old frame AND re-adds a titlebar (tao borderless windows
+   come back .titled after a fullscreen cycle), and it also reorders the
+   window forward — swallowing any hide() issued in the same breath. So:
+   exit the space, let it tear down, THEN strip decorations and hide. */
 fn close_break_windows(app: &tauri::AppHandle) {
     let handle = app.clone();
     on_main(app, move || {
-        let wins = break_windows(&handle);
-        if wins.is_empty() {
-            return;
-        }
-        let labels: Vec<String> = wins.iter().map(|w| w.label().to_string()).collect();
-        /* Leave fullscreen BEFORE going away: a hidden-but-fullscreen window
-           leaves its macOS fullscreen space painted black. destroy() bypasses
-           the close-request dance entirely. */
-        for win in &wins {
+        let count = break_windows(&handle).len();
+        for win in break_windows(&handle) {
             let _ = win.set_fullscreen(false);
-            let _ = win.hide();
         }
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(200));
+        log_line(&handle, &format!("exiting fullscreen on {count} window(s)"));
+        /* The fullscreen exit animates ~0.5s and its completion re-orders
+           the window forward — swallowing a single early hide(). Hide on
+           both sides of that animation: once at 400ms, once at 1800ms. */
+        for delay_ms in [400u64, 1_800] {
             let h2 = handle.clone();
             let h3 = handle.clone();
-            let _ = h2.run_on_main_thread(move || {
-                for win in break_windows(&h3) {
-                    log_line(&h3, &format!("destroy {}", win.label()));
-                    let _ = win.destroy();
-                }
-                log_line(&h3, &format!("teardown done, closed {labels:?}"));
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+                let _ = h2.run_on_main_thread(move || {
+                    for win in break_windows(&h3) {
+                        let _ = win.set_decorations(false);
+                        let _ = win.hide();
+                    }
+                    log_line(&h3, &format!("break windows hidden (+{delay_ms}ms)"));
+                });
             });
-        });
+        }
     });
 }
 
@@ -513,6 +520,7 @@ fn start_break(app: &tauri::AppHandle) {
                     if let Some(win) =
                         h3.get_webview_window(&format!("break-{i}"))
                     {
+                        let _ = win.set_decorations(false);
                         let _ = win.show();
                     }
                 }
@@ -894,13 +902,9 @@ fn complete_break_tracking(_ms: f64) {}
 
 #[tauri::command]
 fn close_current_window(window: tauri::Window) {
-    /* Break windows are recreated per break: destroy, don't park them.
-       Anything else hides — the app lives in the tray. */
-    if window.label().starts_with("break") {
-        let _ = window.destroy();
-    } else {
-        let _ = window.hide();
-    }
+    /* Every surface hides — the app lives in the tray, and break windows
+       live for the whole process. */
+    let _ = window.hide();
 }
 
 /* ------------------------------------------------------------------ */
@@ -1129,12 +1133,10 @@ fn main() {
                break windows, which the schedule recreates per break and so
                are allowed to actually die. */
             tauri::WindowEvent::CloseRequested { api, .. } => {
-                if window.label().starts_with("break") {
-                    /* A real close is fine; teardown exits fullscreen. */
-                } else {
-                    let _ = window.hide();
-                    api.prevent_close();
-                }
+                /* No surface may die: the app lives in the tray and break
+                   windows live for the whole process. */
+                let _ = window.hide();
+                api.prevent_close();
             }
             /* The popover dismisses like every menu-bar popover: a click
                anywhere else takes focus away, and that is the exit. */
