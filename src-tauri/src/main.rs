@@ -384,16 +384,17 @@ fn close_break_windows(app: &tauri::AppHandle) {
         return;
     }
     /* Leave fullscreen BEFORE going away: a hidden-but-fullscreen window
-       leaves its macOS fullscreen space painted black. Hide returns the
-       desktop at once; the destroy follows after the space tears down. */
+       leaves its macOS fullscreen space painted black. destroy() bypasses
+       the close-request dance entirely. */
     for win in &wins {
         let _ = win.set_fullscreen(false);
         let _ = win.hide();
     }
+    let app = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(200));
-        for win in wins {
-            let _ = win.close();
+        for win in break_windows(&app) {
+            let _ = win.destroy();
         }
     });
 }
@@ -826,9 +827,10 @@ fn complete_break_tracking(_ms: f64) {}
 
 #[tauri::command]
 fn close_current_window(window: tauri::Window) {
-    /* Break windows are recreated per break; other surfaces just hide. */
+    /* Break windows are recreated per break: destroy, don't park them.
+       Anything else hides — the app lives in the tray. */
     if window.label().starts_with("break") {
-        let _ = window.close();
+        let _ = window.destroy();
     } else {
         let _ = window.hide();
     }
@@ -972,10 +974,13 @@ fn main() {
             let tray = TrayIconBuilder::with_id("main")
                 .icon(
                     tauri::image::Image::from_bytes(include_bytes!(
-                        "../../resources/icon.png"
+                        "../../resources/tray/tray-iconTemplate@2x.png"
                     ))
                     .expect("tray icon"),
                 )
+                /* A menu-bar icon is a silhouette, not a logo: macOS tints
+                   template images to match the menubar and its own state. */
+                .icon_as_template(true)
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| on_tray_menu(app, event.id().as_ref()))
@@ -1052,7 +1057,7 @@ fn main() {
                are allowed to actually die. */
             tauri::WindowEvent::CloseRequested { api, .. } => {
                 if window.label().starts_with("break") {
-                    let _ = window.set_fullscreen(false);
+                    /* A real close is fine; teardown exits fullscreen. */
                 } else {
                     let _ = window.hide();
                     api.prevent_close();
