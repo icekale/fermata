@@ -25,3 +25,7 @@ dist
 
 # Impeccable design-tooling scratch
 .impeccable/
+
+# Tauri build artifacts
+src-tauri/target/
+src-tauri/gen/schemas/
