@@ -203,6 +203,9 @@ struct AppState {
     idle_counted: Mutex<bool>,
     /* Snoozes since the last taken break, against postponeLimit. */
     postpone_count: Mutex<u32>,
+    /* Break-now started this break; fresh break windows must skip the
+       notice slip and go straight to the sheet. */
+    started_from_tray: Mutex<bool>,
 }
 
 #[derive(serde::Serialize)]
@@ -247,6 +250,7 @@ fn load_state(app: &tauri::AppHandle) -> AppState {
         notice_shown: Mutex::new(false),
         idle_counted: Mutex::new(false),
         postpone_count: Mutex::new(0),
+        started_from_tray: Mutex::new(false),
     }
 }
 
@@ -380,8 +384,10 @@ fn close_break_windows(app: &tauri::AppHandle) {
     }
 }
 
-/* The notice slip: one small window per display, top-centre. */
-fn show_notice(app: &tauri::AppHandle) {
+/* The notice slip: one small window per display, top-centre. When full is
+   true (Break now), the windows come straight up at their monitor's size —
+   there is no notice phase to sit through. */
+fn ensure_break_windows(app: &tauri::AppHandle, full: bool) {
     let monitors = match app.available_monitors() {
         Ok(m) => m,
         Err(_) => return,
@@ -393,14 +399,22 @@ fn show_notice(app: &tauri::AppHandle) {
         }
         let pos = monitor.position();
         let size = monitor.size();
-        let x = pos.x as f64 + (size.width as f64 - 540.0) / 2.0;
-        let y = pos.y as f64 + 50.0;
+        let (w, h, x, y) = if full {
+            (size.width as f64, size.height as f64, pos.x as f64, pos.y as f64)
+        } else {
+            (
+                540.0,
+                100.0,
+                pos.x as f64 + (size.width as f64 - 540.0) / 2.0,
+                pos.y as f64 + 50.0,
+            )
+        };
         let win = WebviewWindowBuilder::new(
             app,
             label.clone(),
             WebviewUrl::App(format!("index.html?page=break&windowId={i}").into()),
         )
-        .inner_size(540.0, 100.0)
+        .inner_size(w, h)
         .position(x, y)
         .visible(true)
         .decorations(false)
@@ -408,16 +422,22 @@ fn show_notice(app: &tauri::AppHandle) {
         .always_on_top(true)
         .skip_taskbar(true);
         if let Err(err) = win.build() {
-            log_line(app, &format!("notice window {label}: {err}"));
+            log_line(app, &format!("break window {label}: {err}"));
         }
     }
 }
 
 fn start_break(app: &tauri::AppHandle) {
-    let state = app.state::<AppState>();
-    if *state.having_break.lock().unwrap() {
-        return; /* The renderer's countdown and the heartbeat can race. */
+    {
+        let state = app.state::<AppState>();
+        if *state.having_break.lock().unwrap() {
+            return; /* The renderer's countdown and the heartbeat can race. */
+        }
     }
+    /* The windows must exist before the event: a fresh one misses whatever
+       was broadcast while it was still loading. */
+    ensure_break_windows(app, true);
+    let state = app.state::<AppState>();
     let length = state.settings.lock().unwrap().break_length_seconds as i64;
     let end_at = Local::now().timestamp_millis() + length * 1000;
     *state.break_end_at.lock().unwrap() = Some(end_at);
@@ -516,9 +536,10 @@ fn tick(app: &tauri::AppHandle) {
     } else {
         let state = app.state::<AppState>();
         let shown = *state.notice_shown.lock().unwrap();
+        *state.started_from_tray.lock().unwrap() = false;
         drop(state);
         if shown {
-            show_notice(app);
+            ensure_break_windows(app, false);
         }
     }
 }
@@ -704,17 +725,25 @@ fn get_time_since_last_break(state: State<'_, AppState>) -> Option<i64> {
 }
 
 #[tauri::command]
-fn was_started_from_tray() -> bool {
-    false
+fn was_started_from_tray(state: State<'_, AppState>) -> bool {
+    *state.started_from_tray.lock().unwrap()
 }
 
 #[tauri::command]
 fn start_break_now(app: tauri::AppHandle) {
+    /* Fresh windows must skip the notice: the user asked for the break. */
+    let state = app.state::<AppState>();
+    *state.started_from_tray.lock().unwrap() = true;
+    drop(state);
     start_break(&app);
 }
 
 #[tauri::command]
 fn break_start(app: tauri::AppHandle) {
+    /* Arrived via the notice slip's own countdown: the slip is the entry. */
+    let state = app.state::<AppState>();
+    *state.started_from_tray.lock().unwrap() = false;
+    drop(state);
     start_break(&app);
 }
 
