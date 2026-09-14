@@ -383,6 +383,7 @@ fn close_break_windows(app: &tauri::AppHandle) {
     if wins.is_empty() {
         return;
     }
+    let labels: Vec<String> = wins.iter().map(|w| w.label().to_string()).collect();
     /* Leave fullscreen BEFORE going away: a hidden-but-fullscreen window
        leaves its macOS fullscreen space painted black. destroy() bypasses
        the close-request dance entirely. */
@@ -394,8 +395,13 @@ fn close_break_windows(app: &tauri::AppHandle) {
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(200));
         for win in break_windows(&app) {
+            log_line(&app, &format!("destroy {}", win.label()));
             let _ = win.destroy();
         }
+        log_line(
+            &app,
+            &format!("teardown done, closed {labels:?}"),
+        );
     });
 }
 
@@ -436,8 +442,12 @@ fn ensure_break_windows(app: &tauri::AppHandle, full: bool) {
         .resizable(false)
         .always_on_top(true)
         .skip_taskbar(true);
-        if let Err(err) = win.build() {
-            log_line(app, &format!("break window {label}: {err}"));
+        match win.build() {
+            Ok(_) => log_line(
+                app,
+                &format!("window {label} created {w}x{h} at ({x},{y}) full={full}"),
+            ),
+            Err(err) => log_line(app, &format!("break window {label}: {err}")),
         }
     }
 }
