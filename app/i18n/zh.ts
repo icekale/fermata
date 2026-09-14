@@ -13,24 +13,40 @@ import type { MessageKey } from "./en";
 
 export const zh: Record<MessageKey, string> = {
   /* --- 导航 ------------------------------------------------------------- */
-  "nav.general": "通用",
-  "nav.hours": "工作时间",
+  "nav.general": "节奏",
+  "nav.hours": "日程",
   "nav.customization": "外观",
   "nav.system": "系统",
   "nav.save": "保存",
+  "nav.revert": "还原",
   "nav.saved": "已保存",
-
-  /* --- 页头（对应参考的 .section-head：eyebrow + 32px 标题 + 导语） --- */
-  "page.general.title": "休息是怎么运作的",
-  "page.general.lede": "多久休息一次、休息多久，以及到点之后会发生什么。",
-  "page.hours.title": "什么时候该休息",
-  "page.hours.lede":
-    "只在设定的工作时段内提醒。拖拽色块可以整体移动，点击可以输入精确时间。",
-  "page.customization.title": "休息时你看到什么",
-  "page.customization.lede":
-    "休息时铺满屏幕的那张纸、它后面的遮罩，以及开始和结束时的提示音。",
-  "page.system.title": "Fermata 的行为",
-  "page.system.lede": "语言、开机启动，以及菜单栏显示什么。",
+  "trayPanel.next": "下次休息",
+  "trayPanel.outside": "非工作时段",
+  "trayPanel.inside": "工作中",
+  "trayPanel.since": "距上次",
+  "trayPanel.sinceShort": "距上次",
+  "trayPanel.start": "立即休息",
+  "trayPanel.pause": "暂停",
+  "trayPanel.resume": "继续",
+  "trayPanel.settings": "设置",
+  "trayPanel.onBreak": "休息中",
+  "trayPanel.at": "下次 {time}",
+  "trayPanel.last": "上次 {time}",
+  "trayPanel.fullscreen": "全屏遮罩",
+  "trayPanel.notify": "简单通知",
+  "trayPanel.freqShort": "间隔",
+  "trayPanel.lenShort": "时长",
+  "trayPanel.modeSheet": "全屏",
+  "trayPanel.modeNotify": "通知",
+  "trayPanel.noHours": "今天无安排",
+  "trayPanel.resumesAt": "{time} 恢复",
+  "trayPanel.noMoreToday": "今天不再提醒",
+  "status.running": "运行中",
+  "status.paused": "已暂停",
+  "health.label": "休息节奏",
+  "health.ok": "很好",
+  "health.off": "已暂停",
+  "health.break": "每次休息 {length}",
 
   /* --- 区块 ------------------------------------------------------------- */
   "sec.breaks.title": "休息",
@@ -76,6 +92,9 @@ export const zh: Record<MessageKey, string> = {
   "field.title": "标题",
   "field.message": "文案",
   "field.messageHint": "一行一句",
+  "break.defaultTitle": "该休息一下了",
+  "break.defaultMessage":
+    "看看远处，放松眼睛。\n站起来走走。\n深呼吸，松一松肩。",
   "field.messagePlaceholder": "输入休息时想看到的话……",
   "field.idleMinimum": "最短闲置时间",
   "field.notifyOnIdle": "自动识别到休息时通知我",
@@ -83,6 +102,7 @@ export const zh: Record<MessageKey, string> = {
   "field.notification": "简单通知",
   "field.noLimit": "不限次数",
   "field.customSheet": "自定义",
+  "field.custom": "自定义",
   "field.sheet": "纸色",
   "field.ink": "墨色",
 
@@ -141,6 +161,7 @@ export const zh: Record<MessageKey, string> = {
   "notice.eyebrow.grace": "休息",
   "notice.eyebrow.countdown": "即将开始",
   "notice.grace": "准备好了就开始休息……",
+  "notice.progress": "距休息开始",
   "notice.start": "开始",
   "notice.snooze": "稍后",
   "notice.skip": "跳过",
@@ -161,8 +182,14 @@ export const zh: Record<MessageKey, string> = {
   /* --- 首次运行 --------------------------------------------------------- */
   "welcome.eyebrow": "欢迎",
   "welcome.title": "Fermata 会在后台运行",
-  "welcome.body": "可以从系统托盘打开这个窗口。",
+  "welcome.body": "它就在菜单栏里——暂停、休息、打开设置，都在那里。",
+  "welcome.body.tray": "它就在系统托盘里——暂停、休息、打开设置，都在那里。",
   "welcome.cta": "明白了",
+
+  /* --- 时间字段里的单位 -------------------------------------------------- */
+  "unit.h": "时",
+  "unit.m": "分",
+  "unit.s": "秒",
 
   /* --- 提示 ------------------------------------------------------------- */
   "toast.saved": "设置已保存",
@@ -187,6 +214,8 @@ export const zh: Record<MessageKey, string> = {
   "tray.about": "关于……",
   "tray.quit": "退出",
   "tray.aboutTitle": "关于",
+  "tray.aboutBody":
+    "一个屏住呼吸、然后继续的休息计时器。\n\n基于 Tom James Watson 的 BreakTimer：\nhttps://github.com/tom-james-watson/breaktimer-app\n\n以 GPL-3.0-or-later 协议分发。",
   "notif.breakTitle": "该休息了！",
   "notif.idleTitle": "检测到你已经在休息",
   "notif.idleBody": "离开 {time}",

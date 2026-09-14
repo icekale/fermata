@@ -15,4 +15,10 @@ export enum IpcChannel {
   SettingsSet = "SETTINGS_SET",
   TimeSinceLastBreakGet = "TIME_SINCE_LAST_BREAK_GET",
   WasStartedFromTrayGet = "WAS_STARTED_FROM_TRAY_GET",
+  TrayStatusGet = "TRAY_STATUS_GET",
+  BreakStartNow = "BREAK_START_NOW",
+  BreaksEnabledSet = "BREAKS_ENABLED_SET",
+  SettingsWindowOpen = "SETTINGS_WINDOW_OPEN",
+  TrayPopoverHide = "TRAY_POPOVER_HIDE",
+  TrayPopoverResize = "TRAY_POPOVER_RESIZE",
 }

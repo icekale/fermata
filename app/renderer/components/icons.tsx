@@ -262,6 +262,14 @@ export function IconChevronDown({ className, size = 15 }: IconProps) {
   );
 }
 
+export function IconChevronRight({ className, size = 15 }: IconProps) {
+  return (
+    <SmallIcon className={className} size={size}>
+      <path d="M6.2 3.6 10.6 8l-4.4 4.4" />
+    </SmallIcon>
+  );
+}
+
 export function IconPlus({ className, size = 16 }: IconProps) {
   return (
     <SmallIcon className={className} size={size}>

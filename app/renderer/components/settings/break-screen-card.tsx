@@ -63,10 +63,9 @@ export default function BreakScreenCard({
               className={cn(
                 "group relative flex h-[68px] flex-col justify-between overflow-hidden rounded-[var(--radius-md)] px-3 py-2.5 text-left",
                 "border transition-[border-color,box-shadow] duration-150 ease-[var(--ease-paper)]",
-                "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy",
                 selected
-                  ? "border-navy shadow-[0_0_0_1px_var(--navy)]"
-                  : "border-rule hover:border-stone",
+                  ? "border-primary shadow-[0_0_0_1px_var(--primary)]"
+                  : "border-border hover:border-primary/50",
               )}
               style={{ backgroundColor: palette.background }}
             >
@@ -88,7 +87,7 @@ export default function BreakScreenCard({
       </div>
 
       <div className="space-y-3">
-        <span className="u-label block">{t("field.customSheet")}</span>
+        <span className="tile-label block">{t("field.customSheet")}</span>
         <div className="grid grid-cols-2 gap-4">
           <ColorWell
             label={t("field.sheet")}
@@ -104,7 +103,7 @@ export default function BreakScreenCard({
         <p
           className={cn(
             "font-sans text-[12px] leading-[1.5]",
-            lowContrast ? "text-destructive" : "text-stone",
+            lowContrast ? "text-destructive" : "text-muted-foreground",
           )}
         >
           {lowContrast
@@ -137,17 +136,16 @@ function ColorWell({
         aria-label={label}
         className={cn(
           "size-9 shrink-0 cursor-pointer appearance-none rounded-[var(--radius-md)]",
-          "border border-rule bg-transparent p-0",
-          "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy",
+          "border border-border bg-transparent p-0",
           "[&::-webkit-color-swatch-wrapper]:p-0",
           "[&::-webkit-color-swatch]:rounded-[9px] [&::-webkit-color-swatch]:border-0",
         )}
       />
       <span className="min-w-0">
-        <span className="block font-sans text-[13px] leading-none text-olive">
+        <span className="block font-sans text-[13px] leading-none text-foreground-soft">
           {label}
         </span>
-        <span className="tnum mt-1 block font-sans text-[12px] leading-none text-stone">
+        <span className="tnum mt-1 block font-sans text-[12px] leading-none text-muted-foreground">
           {value.toUpperCase()}
         </span>
       </span>

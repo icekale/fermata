@@ -38,14 +38,14 @@ export default function VeilCard({
     >
       <div className={off ? "opacity-45" : undefined}>
         <div className="mb-3 flex items-center justify-between gap-4">
-          <span className="u-label">{t("sec.veil.strength")}</span>
+          <span className="tile-label">{t("sec.veil.strength")}</span>
           <span className="flex items-center gap-2">
             <span
               aria-hidden="true"
-              className="size-3.5 rounded-full border border-rule"
+              className="size-3.5 rounded-full border border-border"
               style={{ backgroundColor: settingsDraft.veilColor }}
             />
-            <span className="tnum font-sans text-[13px] text-ink">
+            <span className="tnum font-sans text-[13px] text-foreground">
               {percent}%
             </span>
           </span>
@@ -59,10 +59,6 @@ export default function VeilCard({
           disabled={off}
           aria-label={t("sec.veil.strength")}
         />
-        <div className="mt-2 flex justify-between font-sans text-[12px] text-stone">
-          <span>20%</span>
-          <span>100%</span>
-        </div>
       </div>
     </SettingsSection>
   );

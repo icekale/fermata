@@ -3,8 +3,8 @@ import * as LabelPrimitive from "@radix-ui/react-label";
 
 import { cn } from "@/lib/utils";
 
-/* Field labels sit in the content face at 13px olive: a step quieter than the
-   value they describe. That inversion is what makes a form read as prose. */
+/* A field label is the same micro-label a tile carries: 11px, muted, sentence
+   case. The value below it is the loud thing on both surfaces. */
 function Label({
   className,
   ...props
@@ -13,7 +13,7 @@ function Label({
     <LabelPrimitive.Root
       data-slot="label"
       className={cn(
-        "flex items-center gap-2 font-sans text-[13px] leading-none text-olive select-none",
+        "flex items-center gap-2 text-[11px] font-medium leading-none text-muted-foreground select-none",
         "group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50",
         "peer-disabled:cursor-not-allowed peer-disabled:opacity-50",
         className,

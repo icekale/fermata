@@ -20,7 +20,7 @@ export function FormGroup({
       {label && (
         <div className="flex items-baseline gap-2">
           <Label>{label}</Label>
-          {labelInfo && <span className="u-label">{labelInfo}</span>}
+          {labelInfo && <span className="tile-label">{labelInfo}</span>}
         </div>
       )}
       <div className="space-y-2">{children}</div>

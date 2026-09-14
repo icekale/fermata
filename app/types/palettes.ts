@@ -1,81 +1,60 @@
 import type { MessageKey } from "../i18n";
 
-/* The break screen's palette.
-
-   The old screen shipped two free colour pickers, which meant the app's
-   default break surface was a saturated teal card and every user's break
-   screen was a different product. Both are replaced by six named sheets drawn
-   from the same paper world the rest of the app lives in, with Custom kept as
-   the escape hatch for anyone who wants their own.
-
-   Every preset carries three values, and the third is the one that matters:
-   the background fills the sheet, the text is the ink on it, and the veil is
-   the colour the DESK goes when you ask a break to dim the screen behind it.
-   The old code derived the veil by darkening the sheet colour to 30%, which
-   turned parchment into mud; a named veil keeps the two surfaces related but
-   distinct. */
-
 export interface BreakPalette {
   id: string;
-  /** Message key, so the six names exist once and translate with everything
-   *  else. */
   nameKey: MessageKey;
-  /** The sheet: fills the break window. */
   background: string;
-  /** The ink: title, countdown, message, actions. */
   text: string;
-  /** The desk: the veil drawn behind the sheet when "Veil the screen" is on. */
   veil: string;
 }
 
 export const breakPalettes: BreakPalette[] = [
   {
-    id: "paper",
-    nameKey: "palette.paper",
-    background: "#f5f4ed",
-    text: "#141413",
-    veil: "#33302a",
+    id: "obsidian",
+    nameKey: "palette.ink",
+    background: "#2a241c",
+    text: "#e8ca8d",
+    veil: "#14110c",
   },
   {
-    id: "ink",
-    nameKey: "palette.ink",
+    id: "frost",
+    nameKey: "palette.paper",
+    background: "#f3efe4",
+    text: "#2a241c",
+    veil: "#1f1b16",
+  },
+  {
+    id: "midnight",
+    nameKey: "palette.midnight",
     background: "#1a1917",
     text: "#f4f2ec",
     veil: "#0b0b0a",
   },
   {
-    id: "midnight",
-    nameKey: "palette.midnight",
-    background: "#16233a",
-    text: "#eef2f7",
-    veil: "#0a1120",
-  },
-  {
-    id: "moss",
+    id: "emerald",
     nameKey: "palette.moss",
-    background: "#46503f",
-    text: "#f1efe6",
-    veil: "#252b20",
+    background: "#2c3324",
+    text: "#d5e0c4",
+    veil: "#141810",
   },
   {
-    id: "clay",
+    id: "amber",
     nameKey: "palette.clay",
-    background: "#8c3a24",
-    text: "#faf1ea",
-    veil: "#43190f",
+    background: "#3a2a1c",
+    text: "#f0d3a8",
+    veil: "#1a120c",
   },
   {
-    id: "plum",
+    id: "amethyst",
     nameKey: "palette.plum",
-    background: "#3c2a3d",
-    text: "#f3ecf3",
-    veil: "#1f1420",
+    background: "#2e2430",
+    text: "#e6d4e8",
+    veil: "#160f18",
   },
 ];
 
 export const defaultPalette = breakPalettes[0];
 
-/** Which preset, if any, the current pair of colours is exactly. */
 export function findPalette(
   background: string,
   text: string,
@@ -120,28 +99,21 @@ function toHex(rgb: [number, number, number]): string {
   );
 }
 
-/* A veil derived from a sheet colour: drop the lightness hard, then pull most
-   of the saturation back out. Naively multiplying the channels (what the app
-   used to do) keeps full saturation, so a teal sheet produced a teal desk and
-   the two surfaces read as one flat colour. */
 export function deriveVeil(background: string): string {
   const [r, g, b] = toRgb(background);
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
   const lightness = (max + min) / 2 / 255;
-  const targetL = 0.11;
-  // Scale toward the target lightness rather than multiplying, so a light
-  // sheet and a dark sheet both land on a desk of about the same depth.
+  const targetL = 0.08;
   const scale = lightness > 0 ? targetL / Math.max(lightness, 0.02) : 1;
-  const desaturate = 0.62;
+  const desaturate = 0.7;
   const grey = [r, g, b].reduce((a, c) => a + c, 0) / 3;
   const mixed = [r, g, b].map((c) => grey + (c - grey) * desaturate);
   return toHex(
-    mixed.map((c) => c * Math.min(scale, 1.1)) as [number, number, number],
+    mixed.map((c) => c * Math.min(scale, 1.05)) as [number, number, number],
   );
 }
 
-/** Relative luminance, for the contrast guard in the theme card. */
 export function luminance(hex: string): number {
   const [r, g, b] = toRgb(hex).map((c) => {
     const s = c / 255;
@@ -150,7 +122,6 @@ export function luminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-/** WCAG contrast ratio between two hex colours. */
 export function contrastRatio(a: string, b: string): number {
   const la = luminance(a);
   const lb = luminance(b);

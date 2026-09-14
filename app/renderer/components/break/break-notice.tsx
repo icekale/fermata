@@ -6,7 +6,6 @@ import { formatTimeSinceLastBreak } from "./utils";
 
 const GRACE_PERIOD_MS = 60_000;
 const TOTAL_COUNTDOWN_MS = 120_000;
-const COUNTDOWN_MS = TOTAL_COUNTDOWN_MS - GRACE_PERIOD_MS;
 
 interface BreakNoticeProps {
   onCountdownOver: () => void;
@@ -18,14 +17,6 @@ interface BreakNoticeProps {
   timeSinceLastBreak: number | null;
 }
 
-/* The notice that arrives a minute before a break: a slip of paper laid over
-   whatever you are doing.
-
-   The old slip colour-filled its own background from the break theme and drew
-   the countdown as a translucent wipe across the whole card, so the one thing
-   you needed to read — how long you have — was the thing competing with a
-   moving coloured rectangle. Here the slip is always paper, the countdown is
-   the largest thing on it, and the only moving part is a 1px rule. */
 export function BreakNotice({
   onCountdownOver,
   onPostponeBreak,
@@ -36,7 +27,7 @@ export function BreakNotice({
   timeSinceLastBreak,
 }: BreakNoticeProps) {
   const [phase, setPhase] = useState<"grace" | "countdown">("grace");
-  const [msRemaining, setMsRemaining] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
     const start = moment();
@@ -44,15 +35,12 @@ export function BreakNotice({
 
     const tick = () => {
       const elapsed = moment().diff(start, "milliseconds");
-      if (elapsed < GRACE_PERIOD_MS) {
-        setPhase("grace");
-      } else if (elapsed < TOTAL_COUNTDOWN_MS) {
-        setPhase("countdown");
-        setMsRemaining(TOTAL_COUNTDOWN_MS - elapsed);
-      } else {
+      if (elapsed >= TOTAL_COUNTDOWN_MS) {
         onCountdownOver();
         return;
       }
+      setElapsed(elapsed);
+      setPhase(elapsed < GRACE_PERIOD_MS ? "grace" : "countdown");
       timeoutId = setTimeout(tick, 100);
     };
 
@@ -62,50 +50,45 @@ export function BreakNotice({
     };
   }, [onCountdownOver]);
 
-  const secondsRemaining = Math.ceil(msRemaining / 1000);
+  const secondsRemaining = Math.ceil((TOTAL_COUNTDOWN_MS - elapsed) / 1000);
   const clock = `${Math.floor(secondsRemaining / 60)}:${String(
     secondsRemaining % 60,
   ).padStart(2, "0")}`;
-  const progress =
-    phase === "countdown"
-      ? ((COUNTDOWN_MS - msRemaining) / COUNTDOWN_MS) * 100
-      : 0;
+  /* One timeline: the slip is 2 minutes from "asked" to "taken", and the bar
+     moves through the grace half too — a bar parked at 0% for a minute is the
+     lie that makes the fullscreen takeover feel like an ambush. */
+  const progress = (elapsed / TOTAL_COUNTDOWN_MS) * 100;
 
   const t = useT();
 
   return (
-    <div
-      className="slip-land relative flex h-full w-full flex-col justify-center overflow-hidden rounded-[var(--radius-lg)] border border-rule px-4"
-      style={{ backgroundColor: "var(--paper-raised)" }}
-    >
+    <div className="slip-land relative flex h-full w-full flex-col justify-center overflow-hidden rounded-[14px] border border-border bg-raised px-5 shadow-lift">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <span className="u-label block">
+          <span className="tile-label">
             {t(
               phase === "grace"
                 ? "notice.eyebrow.grace"
                 : "notice.eyebrow.countdown",
             )}
           </span>
-          <div className="mt-1 flex items-baseline gap-2.5">
-            {phase === "countdown" ? (
-              <span className="tnum text-[24px] leading-none text-ink">
-                {clock}
-              </span>
-            ) : (
-              <span className="text-[14px] leading-none text-ink">
-                {t("notice.grace")}
-              </span>
-            )}
-            {timeSinceLastBreak !== null && (
-              <span className="truncate font-sans text-[12px] leading-none text-stone">
-                {(() => {
-                  const since = formatTimeSinceLastBreak(timeSinceLastBreak);
-                  return t(since.key, since.vars);
-                })()}
-              </span>
-            )}
-          </div>
+          {phase === "countdown" ? (
+            <p className="tile-value mt-1.5">{clock}</p>
+          ) : (
+            <p className="mt-1.5 text-[13px] font-medium leading-snug text-foreground">
+              {t("notice.grace")}
+            </p>
+          )}
+          {/* On its own line: beside the headline it had to be truncated, and a
+              cut-off sentence is worse than one more line on a 100px slip. */}
+          {timeSinceLastBreak !== null && (
+            <p className="tile-caption mt-1.5">
+              {(() => {
+                const since = formatTimeSinceLastBreak(timeSinceLastBreak);
+                return t(since.key, since.vars);
+              })()}
+            </p>
+          )}
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
@@ -125,9 +108,16 @@ export function BreakNotice({
         </div>
       </div>
 
-      <div className="mt-3 h-px w-full bg-rule-soft">
+      <div
+        className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-well"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(progress)}
+        aria-label={t("notice.progress")}
+      >
         <div
-          className="h-full bg-navy transition-[width] duration-100 ease-linear"
+          className="h-full bg-primary transition-[width] duration-100 ease-linear rounded-full"
           style={{ width: `${progress}%` }}
         />
       </div>

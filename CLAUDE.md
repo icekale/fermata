@@ -42,8 +42,8 @@ the obvious alternative was tried and measured wrong.
 | `i18n.tsx`                              | `LocaleProvider`, `useT()`, and the `<html lang>` switch              |
 | `components/icons.tsx`                  | all 19 icons, drawn here, no icon library                             |
 | `components/settings/nav.tsx`           | the rail's model — four groups and their section anchors              |
-| `components/settings/settings-rail.tsx` | the contents rail and its scroll-spy                                  |
-| `components/settings/page-head.tsx`     | the eyebrow / 32px title / lede at the top of each page               |
+| `components/settings/mole-nav.tsx`      | the titlebar tabs and their groups                                    |
+| `components/settings/health-pane.tsx`   | the hero verdict row at the top of the Breaks tab                     |
 | `components/settings/working-hours.tsx` | the week ledger                                                       |
 | `components/settings/shift-band.tsx`    | one shift: drag to move, click to edit                                |
 | `components/break/break-page.tsx`       | the break sheet                                                       |
@@ -101,7 +101,7 @@ a redesign hides best are invisible in a screenshot:
 
 ```bash
 npm run build-renderer
-node scripts/verify-ui.mjs --shot /tmp/fermata-shots   # 17 surfaces
+node scripts/verify-ui.mjs --shot /tmp/fermata-shots   # 20 surfaces
 node scripts/verify-ui.mjs --slow                      # + the notice's countdown
 ```
 

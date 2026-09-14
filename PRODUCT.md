@@ -60,6 +60,10 @@ ledger instead of assembled from fourteen time fields.
 - Three desktop platforms — macOS, Windows and Linux — are all first-class. The
   release workflow builds all three; nothing may be added that only works on one.
 - The app runs in the tray / menu bar; closing the settings window does not quit.
+- Clicking the tray icon opens a compact popover — next break, cadence,
+  time since the last break, today's hours — with Break now, Pause and a door to
+  Settings. The settings window is opened from there rather than on every
+  launch; the app starts quiet in the menu bar.
 - On first launch it opens the settings window once, then hides in the tray.
 - A break fires on a timer. Depending on notification type it is either an OS
   notification or an always-on-top window on every connected display.
@@ -88,6 +92,8 @@ Confirmed functionality that future work must preserve:
 - veil on/off and strength
 - start at login
 - menu bar text: time to next break, or time since last break
+- the tray popover: next break, cadence, time since last break, today's hours,
+  break now, pause, open settings
 - language: English or Simplified Chinese, or follow the system
 - break window on all displays against a synchronised timeline
 

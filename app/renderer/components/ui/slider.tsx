@@ -3,8 +3,6 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-/* Hairline-scale slider: a 4px well, a navy ink fill, a paper knob ringed in
-   navy. No gradient, no gloss, no drop shadow. */
 function Slider({
   className,
   defaultValue,
@@ -31,7 +29,7 @@ function Slider({
       min={min}
       max={max}
       className={cn(
-        "relative flex w-full touch-none items-center select-none data-[disabled]:opacity-45",
+        "relative flex w-full touch-none items-center select-none data-[disabled]:opacity-40",
         "data-[orientation=vertical]:h-full data-[orientation=vertical]:min-h-44 data-[orientation=vertical]:w-auto data-[orientation=vertical]:flex-col",
         className,
       )}
@@ -40,15 +38,15 @@ function Slider({
       <SliderPrimitive.Track
         data-slot="slider-track"
         className={cn(
-          "relative grow overflow-hidden rounded-full bg-paper-sunk ring-1 ring-rule ring-inset",
-          "data-[orientation=horizontal]:h-1 data-[orientation=horizontal]:w-full",
-          "data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1",
+          "relative grow overflow-hidden rounded-full bg-well",
+          "data-[orientation=horizontal]:h-1.5 data-[orientation=horizontal]:w-full",
+          "data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1.5",
         )}
       >
         <SliderPrimitive.Range
           data-slot="slider-range"
           className={cn(
-            "absolute bg-navy",
+            "absolute bg-primary",
             "data-[orientation=horizontal]:h-full",
             "data-[orientation=vertical]:w-full",
           )}
@@ -59,11 +57,12 @@ function Slider({
           data-slot="slider-thumb"
           key={index}
           className={cn(
-            "block size-4 shrink-0 rounded-full border-[1.5px] border-navy bg-paper-raised",
-            "shadow-[var(--shadow-hairline)]",
-            "hover:ring-4 hover:ring-[var(--navy-wash)]",
-            "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy",
-            "disabled:pointer-events-none disabled:opacity-45",
+            /* 20px, not 16: the product's floor for anything a pointer lands
+               on, and a slider thumb is grabbed, not pointed at. */
+            "block size-5 shrink-0 rounded-full bg-ink-hi shadow-sm",
+            "transition-transform duration-100 hover:scale-110 active:scale-95",
+            "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+            "disabled:pointer-events-none disabled:opacity-40",
           )}
         />
       ))}

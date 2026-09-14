@@ -1,3 +1,5 @@
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -19,11 +21,12 @@ import { toast } from "../toaster";
 import AdvancedCard from "./settings/advanced-card";
 import AudioCard from "./settings/audio-card";
 import { IconGlobe, IconWeek } from "./icons";
-import PageHead from "./settings/page-head";
+import HealthPane from "./settings/health-pane";
 import VeilCard from "./settings/veil-card";
 import BreaksCard from "./settings/breaks-card";
 import SettingsSection from "./settings/settings-section";
-import SettingsRail, { SCROLL_ID } from "./settings/settings-rail";
+import MoleNav from "./settings/mole-nav";
+import { SCROLL_ID } from "./settings/nav";
 import SkipCard from "./settings/skip-card";
 import SmartBreaksCard from "./settings/smart-breaks-card";
 import SnoozeCard from "./settings/snooze-card";
@@ -59,7 +62,11 @@ export default function SettingsEl() {
   }, [settings, settingsDraft]);
 
   if (settings === null || settingsDraft === null) {
-    return null;
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background text-muted-foreground">
+        Fermata
+      </div>
+    );
   }
 
   const handleNotificationTypeChange = (value: string): void => {
@@ -165,171 +172,200 @@ export default function SettingsEl() {
     });
   };
 
+  /* Language is staged like every other setting: it takes effect on Save, so
+     the draft model stays true — closing the window without saving has never
+     silently committed anything, including this. */
   const handleLanguageChange = (value: string): void => {
     const language = value as Settings["language"];
     setSettingsDraft({ ...settingsDraft, language });
-    setLanguage(language);
   };
 
   const handleSave = async () => {
     await ipcRenderer.invokeSetSettings(settingsDraft);
     toast(t("toast.saved"));
     setSettings(settingsDraft);
+    setLanguage(settingsDraft.language);
+  };
+
+  const handleRevert = () => {
+    setSettingsDraft(settings);
   };
 
   return (
-    <div className="flex h-screen w-full bg-background">
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-background select-none">
+      <h1 className="sr-only">Fermata</h1>
       <Tabs
         value={activeGroup}
         onValueChange={setActiveGroup}
-        orientation="vertical"
-        className="flex h-full w-full flex-row"
+        className="flex h-full min-h-0 flex-col"
       >
-        <SettingsRail
-          activeGroup={activeGroup}
+        <MoleNav
           showSave={dirty}
           onSave={handleSave}
+          onRevert={handleRevert}
+          breaksEnabled={settingsDraft.breaksEnabled}
         />
-        <div id={SCROLL_ID} className="min-h-0 flex-1 overflow-auto px-9 py-8">
-          <TabsContent
-            value="break-settings"
-            className="stagger m-0 space-y-10"
-          >
-            <PageHead
-              index={1}
-              labelKey="nav.general"
-              titleKey="page.general.title"
-              ledeKey="page.general.lede"
-            />
-
-            <BreaksCard
-              settingsDraft={settingsDraft}
-              onNotificationTypeChange={handleNotificationTypeChange}
-              onDateChange={handleDateChange}
-              onTextChange={handleTextChange}
-              onSwitchChange={handleSwitchChange}
-            />
-
-            <SmartBreaksCard
-              settingsDraft={settingsDraft}
-              onSwitchChange={handleSwitchChange}
-              onDateChange={handleDateChange}
-            />
-
-            <SnoozeCard
-              settingsDraft={settingsDraft}
-              onSwitchChange={handleSwitchChange}
-              onDateChange={handleDateChange}
-              onPostponeLimitChange={handlePostponeLimitChange}
-            />
-
-            <SkipCard
-              settingsDraft={settingsDraft}
-              onSwitchChange={handleSwitchChange}
-            />
-
-            <AdvancedCard
-              settingsDraft={settingsDraft}
-              onSwitchChange={handleSwitchChange}
-            />
-          </TabsContent>
-
-          <TabsContent value="working-hours" className="stagger m-0">
-            <PageHead
-              index={2}
-              labelKey="nav.hours"
-              titleKey="page.hours.title"
-              ledeKey="page.hours.lede"
-            />
-
-            <SettingsSection
-              id="sec-hours"
-              icon={<IconWeek size={19} />}
-              title={t("sec.hours.title")}
-              toggle={{
-                checked: settingsDraft.workingHoursEnabled,
-                onCheckedChange: (checked) =>
-                  handleSwitchChange("workingHoursEnabled", checked),
-                disabled: !settingsDraft.breaksEnabled,
-              }}
+        <div
+          id={SCROLL_ID}
+          className="flex-1 min-h-0 overflow-y-auto px-5 py-4"
+        >
+          <div className="mx-auto w-full max-w-[1100px]">
+            <TabsContent
+              value="break-settings"
+              className="stagger m-0 space-y-3"
             >
-              <WorkingHoursSettings
-                settingsDraft={settingsDraft}
-                setSettingsDraft={setSettingsDraft}
-              />
-            </SettingsSection>
-          </TabsContent>
+              <div className="grid grid-cols-1 gap-3">
+                <HealthPane
+                  settingsDraft={settingsDraft}
+                  onSwitchChange={handleSwitchChange}
+                />
+                <BreaksCard
+                  settingsDraft={settingsDraft}
+                  onNotificationTypeChange={handleNotificationTypeChange}
+                  onDateChange={handleDateChange}
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="tile min-h-0" id="sec-breaks">
+                  <p className="tile-label">{t("field.title")}</p>
+                  <Input
+                    className="mt-3"
+                    id="break-title"
+                    value={settingsDraft.breakTitle}
+                    placeholder={t("break.defaultTitle")}
+                    onChange={handleTextChange.bind(null, "breakTitle")}
+                    disabled={settingsDraft.breaksEnabled === false}
+                  />
+                </div>
+                <div className="tile min-h-0">
+                  <p className="tile-label">{t("field.message")}</p>
+                  <Textarea
+                    className="mt-3 resize-none"
+                    id="break-message"
+                    rows={2}
+                    value={settingsDraft.breakMessage}
+                    onChange={handleTextChange.bind(null, "breakMessage")}
+                    disabled={settingsDraft.breaksEnabled === false}
+                    placeholder={t("field.messagePlaceholder")}
+                  />
+                </div>
+              </div>
 
-          <TabsContent value="customization" className="stagger m-0 space-y-10">
-            <PageHead
-              index={3}
-              labelKey="nav.customization"
-              titleKey="page.customization.title"
-              ledeKey="page.customization.lede"
-            />
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <SmartBreaksCard
+                  settingsDraft={settingsDraft}
+                  onSwitchChange={handleSwitchChange}
+                  onDateChange={handleDateChange}
+                />
 
-            <BreakScreenCard
-              settingsDraft={settingsDraft}
-              onPaletteChange={handlePaletteChange}
-              onColorChange={handleColorChange}
-            />
+                <SnoozeCard
+                  settingsDraft={settingsDraft}
+                  onSwitchChange={handleSwitchChange}
+                  onDateChange={handleDateChange}
+                  onPostponeLimitChange={handlePostponeLimitChange}
+                />
 
-            <VeilCard
-              settingsDraft={settingsDraft}
-              onSwitchChange={handleSwitchChange}
-              onSliderChange={handleSliderChange}
-            />
+                <SkipCard
+                  settingsDraft={settingsDraft}
+                  onSwitchChange={handleSwitchChange}
+                />
+              </div>
 
-            <AudioCard
-              settingsDraft={settingsDraft}
-              onSoundTypeChange={handleSoundTypeChange}
-              onSliderChange={handleSliderChange}
-            />
-          </TabsContent>
-
-          {processEnv.SNAP === undefined && (
-            <TabsContent value="system" className="stagger m-0 space-y-10">
-              <PageHead
-                index={4}
-                labelKey="nav.system"
-                titleKey="page.system.title"
-                ledeKey="page.system.lede"
-              />
-
-              <SettingsSection
-                id="sec-language"
-                icon={<IconGlobe size={19} />}
-                title={t("sec.language.title")}
-                helperText={t("sec.language.helper")}
-              >
-                <Select
-                  value={settingsDraft.language}
-                  onValueChange={handleLanguageChange}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="system">{t("lang.system")}</SelectItem>
-                    <SelectItem value="en">{t("lang.en")}</SelectItem>
-                    <SelectItem value="zh">{t("lang.zh")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </SettingsSection>
-
-              <StartupCard
+              <AdvancedCard
                 settingsDraft={settingsDraft}
                 onSwitchChange={handleSwitchChange}
               />
-              {processPlatform === "darwin" && (
-                <TrayCard
+            </TabsContent>
+
+            <TabsContent
+              value="working-hours"
+              className="stagger m-0 space-y-3"
+            >
+              <SettingsSection
+                id="sec-hours"
+                icon={<IconWeek size={19} />}
+                title={t("sec.hours.title")}
+                toggle={{
+                  checked: settingsDraft.workingHoursEnabled,
+                  onCheckedChange: (checked) =>
+                    handleSwitchChange("workingHoursEnabled", checked),
+                  disabled: !settingsDraft.breaksEnabled,
+                }}
+              >
+                <WorkingHoursSettings
+                  settingsDraft={settingsDraft}
+                  setSettingsDraft={setSettingsDraft}
+                />
+              </SettingsSection>
+            </TabsContent>
+
+            <TabsContent
+              value="customization"
+              className="stagger m-0 space-y-3"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <BreakScreenCard
+                  settingsDraft={settingsDraft}
+                  onPaletteChange={handlePaletteChange}
+                  onColorChange={handleColorChange}
+                />
+
+                <VeilCard
                   settingsDraft={settingsDraft}
                   onSwitchChange={handleSwitchChange}
-                  onTrayTextModeChange={handleTrayTextModeChange}
+                  onSliderChange={handleSliderChange}
                 />
-              )}
+              </div>
+
+              <AudioCard
+                settingsDraft={settingsDraft}
+                onSoundTypeChange={handleSoundTypeChange}
+                onSliderChange={handleSliderChange}
+              />
             </TabsContent>
-          )}
+
+            {processEnv.SNAP === undefined && (
+              <TabsContent value="system" className="stagger m-0 space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <StartupCard
+                    settingsDraft={settingsDraft}
+                    onSwitchChange={handleSwitchChange}
+                  />
+
+                  <SettingsSection
+                    id="sec-language"
+                    icon={<IconGlobe size={19} />}
+                    title={t("sec.language.title")}
+                    helperText={t("sec.language.helper")}
+                  >
+                    <Select
+                      value={settingsDraft.language}
+                      onValueChange={handleLanguageChange}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="system">
+                          {t("lang.system")}
+                        </SelectItem>
+                        <SelectItem value="en">{t("lang.en")}</SelectItem>
+                        <SelectItem value="zh">{t("lang.zh")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </SettingsSection>
+                </div>
+
+                {processPlatform === "darwin" && (
+                  <TrayCard
+                    settingsDraft={settingsDraft}
+                    onSwitchChange={handleSwitchChange}
+                    onTrayTextModeChange={handleTrayTextModeChange}
+                  />
+                )}
+              </TabsContent>
+            )}
+          </div>
         </div>
       </Tabs>
       <WelcomeModal

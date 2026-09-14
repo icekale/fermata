@@ -10,26 +10,40 @@
 
 export const en = {
   /* --- navigation ------------------------------------------------------- */
-  "nav.general": "General",
-  "nav.hours": "Working Hours",
-  "nav.customization": "Customization",
+  "nav.general": "Breaks",
+  "nav.hours": "Hours",
+  "nav.customization": "Look",
   "nav.system": "System",
   "nav.save": "Save",
+  "nav.revert": "Revert",
   "nav.saved": "All changes saved",
-
-  /* --- page heads (the reference's .section-head: eyebrow, 32px title, lede) */
-  "page.general.title": "How breaks work",
-  "page.general.lede":
-    "How often a break arrives, how long it lasts, and what happens when it does.",
-  "page.hours.title": "When you are covered",
-  "page.hours.lede":
-    "Only show breaks during your configured work schedule. Drag a band to move it, or click one to set exact times.",
-  "page.customization.title": "What a break looks like",
-  "page.customization.lede":
-    "The sheet a break fills the screen with, the veil behind it, and the tone at each end.",
-  "page.system.title": "How Fermata behaves",
-  "page.system.lede":
-    "Language, starting with your computer, and what the menu bar shows.",
+  "trayPanel.next": "Next break",
+  "trayPanel.outside": "Outside hours",
+  "trayPanel.inside": "On hours",
+  "trayPanel.since": "Since last",
+  "trayPanel.sinceShort": "Since",
+  "trayPanel.start": "Break now",
+  "trayPanel.pause": "Pause",
+  "trayPanel.resume": "Resume",
+  "trayPanel.settings": "Settings",
+  "trayPanel.onBreak": "On a break",
+  "trayPanel.at": "at {time}",
+  "trayPanel.last": "at {time}",
+  "trayPanel.fullscreen": "Full screen",
+  "trayPanel.notify": "Notification",
+  "trayPanel.freqShort": "Freq",
+  "trayPanel.lenShort": "Len",
+  "trayPanel.modeSheet": "Popup",
+  "trayPanel.modeNotify": "Notify",
+  "trayPanel.noHours": "No hours today",
+  "trayPanel.resumesAt": "Resumes at {time}",
+  "trayPanel.noMoreToday": "No more breaks today",
+  "status.running": "Running",
+  "status.paused": "Paused",
+  "health.label": "Cadence",
+  "health.ok": "On track",
+  "health.off": "Paused",
+  "health.break": "a {length} break",
 
   /* --- sections --------------------------------------------------------- */
   "sec.breaks.title": "Breaks",
@@ -82,6 +96,9 @@ export const en = {
   "field.title": "Title",
   "field.message": "Message",
   "field.messageHint": "One line per thought",
+  "break.defaultTitle": "Time for a break.",
+  "break.defaultMessage":
+    "Rest your eyes.\nStretch your legs.\nBreathe. Relax.",
   "field.messagePlaceholder": "Enter your break message...",
   "field.idleMinimum": "Minimum idle time",
   "field.notifyOnIdle": "Tell me when a break is detected automatically",
@@ -89,8 +106,9 @@ export const en = {
   "field.notification": "Simple notification",
   "field.noLimit": "No limit",
   "field.customSheet": "Custom sheet",
+  "field.custom": "Custom",
   "field.sheet": "Sheet",
-  "field.ink": "Ink",
+  "field.ink": "Text ink",
 
   /* --- the week ledger -------------------------------------------------- */
   "ledger.now": "now",
@@ -147,6 +165,7 @@ export const en = {
   "notice.eyebrow.grace": "Break",
   "notice.eyebrow.countdown": "Break starting in",
   "notice.grace": "Start your break when ready…",
+  "notice.progress": "Time until the break starts",
   "notice.start": "Start",
   "notice.snooze": "Snooze",
   "notice.skip": "Skip",
@@ -167,8 +186,16 @@ export const en = {
   /* --- first run -------------------------------------------------------- */
   "welcome.eyebrow": "Welcome",
   "welcome.title": "Fermata runs in the background",
-  "welcome.body": "The app can be accessed via your system tray.",
-  "welcome.cta": "Understood, let us go",
+  "welcome.body":
+    "It lives in your menu bar — pause, take a break, or open Settings from there.",
+  "welcome.body.tray":
+    "It lives in your system tray — pause, take a break, or open Settings from there.",
+  "welcome.cta": "Get started",
+
+  /* --- unit letters in the time fields ---------------------------------- */
+  "unit.h": "h",
+  "unit.m": "m",
+  "unit.s": "s",
 
   /* --- toasts ----------------------------------------------------------- */
   "toast.saved": "Settings saved",
@@ -193,6 +220,8 @@ export const en = {
   "tray.about": "About...",
   "tray.quit": "Quit",
   "tray.aboutTitle": "About",
+  "tray.aboutBody":
+    "A break timer that holds the note, then lets you continue.\n\nBased on BreakTimer by Tom James Watson:\nhttps://github.com/tom-james-watson/breaktimer-app\n\nDistributed under the GPL-3.0-or-later license.",
   "notif.breakTitle": "Time for a break!",
   "notif.idleTitle": "Break automatically detected",
   "notif.idleBody": "Away for {time}",

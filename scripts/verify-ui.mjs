@@ -100,6 +100,36 @@ const CASES = [
     group: "system",
     click: "[data-slot=tabs-list] > button:nth-of-type(4)",
   },
+  {
+    id: "tray",
+    query: "?page=tray",
+    w: 340,
+    h: 428,
+    wait: 900,
+    group: null,
+  },
+  {
+    /* The popover in the other language: it is the surface where a longer word
+       pushes a caption onto a second line. */
+    id: "tray-zh",
+    query: "?page=tray",
+    w: 340,
+    h: 428,
+    wait: 900,
+    zh: true,
+  },
+  {
+    /* Outside working hours: the state where the popover once narrated a
+       countdown that was not happening — cadence printed as the hero, a
+       caption that said "paused", and a bar filled to full against a cycle
+       that had stopped. */
+    id: "tray-outside",
+    query: "?page=tray",
+    w: 340,
+    h: 428,
+    wait: 900,
+    outside: true,
+  },
   { id: "notice", query: "?page=break&windowId=0", w: 544, h: 100, wait: 1600 },
   {
     id: "break",
@@ -207,7 +237,7 @@ function arg(name, fallback) {
   return i === -1 ? fallback : process.argv[i + 1];
 }
 
-function stub({ firstRun, running, noVeil, zh }) {
+function stub({ firstRun, running, noVeil, zh, outside }) {
   const s = {
     language: zh ? "zh" : "en",
     autoLaunch: true,
@@ -225,10 +255,10 @@ function stub({ firstRun, running, noVeil, zh }) {
     idleResetNotification: false,
     soundType: "GONG",
     breakSoundVolume: 1,
-    breakTitle: "Time for a break.",
-    breakMessage: "Rest your eyes.\nStretch your legs.\nBreathe. Relax.",
-    backgroundColor: "#f5f4ed",
-    textColor: "#141413",
+    breakTitle: "",
+    breakMessage: "",
+    backgroundColor: "#2a241c",
+    textColor: "#e8ca8d",
     veilColor: "#33302a",
     showBackdrop: Boolean(noVeil) === false,
     backdropOpacity: 0.7,
@@ -264,6 +294,13 @@ window.ipcRenderer={invokeGetSettings:async()=>S,invokeSetSettings:noop,
 invokeGetAppInitialized:async()=>${firstRun ? "false" : "true"},invokeSetAppInitialized:noop,
 invokeGetAllowPostpone:async()=>true,invokeGetBreakLength:async()=>120,
 invokeGetTimeSinceLastBreak:async()=>725,invokeWasStartedFromTray:async()=>false,
+	invokeGetTrayStatus:async()=>({enabled:S.breaksEnabled,havingBreak:false,
+inWorkingHours:${outside ? "false" : "true"},nextBreakAt:${outside ? "null" : "Date.now()+955000"},
+nextWindowOpenAt:${outside ? "Date.now()+39600000" : "null"},
+sinceLastBreakSeconds:725,frequencySeconds:S.breakFrequencySeconds,lengthSeconds:S.breakLengthSeconds,
+todayFromMinutes:540,todayToMinutes:1080,popup:true}),
+invokeStartBreakNow:noop,invokeSetBreaksEnabled:noop,invokeOpenSettingsWindow:noop,
+invokeHideTrayPopover:noop,invokeResizeTrayPopover:(h)=>{window.__trayHeight=h;},
 invokeBreakStart:noop,invokeBreakEnd:noop,invokeBreakPostpone:noop,invokeStartSound:noop,
 invokeEndSound:noop,invokeCompleteBreakTracking:noop,invokeBreakWindowResize:noop,
 onBreakStart:()=>{},onBreakEnd:()=>{},onPlayStartSound:()=>{},onPlayEndSound:()=>{}};`;
@@ -317,11 +354,21 @@ const AUDIT = String.raw`(() => {
     if (el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 1) {
       const s = getComputedStyle(el);
       if (s.overflowX === "visible" && s.overflowY === "visible") {
-        clipped.push((el.className.toString().slice(0, 44) || el.tagName));
+        /* The class alone does not say WHICH row overflowed; the text does.
+           Named content means the next reader fixes it without a second run. */
+        clipped.push(
+          (el.className.toString().slice(0, 34) || el.tagName) +
+            " [" +
+            (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 24) +
+            "] " +
+            el.clientWidth +
+            "<" +
+            el.scrollWidth,
+        );
       }
     }
   }
-  if (clipped.length) issues.push("clipped content x" + clipped.length + ": " + clipped.slice(0, 5).join(" | "));
+  if (clipped.length) issues.push("clipped content x" + clipped.length + ": " + clipped.slice(0, 6).join(" | "));
 
   let minFont = 999;
   const tiny = [], faint = [], faces = {}, cold = [];
@@ -358,6 +405,41 @@ const AUDIT = String.raw`(() => {
   if (faint.length) issues.push("low contrast x" + faint.length + ": " + faint.slice(0, 6).join(" | "));
   if (cold.length) issues.push("cool greys x" + cold.length + ": " + cold.slice(0, 5).join(" | "));
 
+  /* The tray card must be its content's height. When the card was stretched to the frame
+     with no auto margin, the window's leftover 72px collected below the last
+     child as a visible void; a fixed window height cannot be right for two
+     languages. Measured as: card minus the sum of its own children. */
+  const trayCard = document.querySelector(".panel");
+  if (trayCard) {
+    const kids = Array.from(trayCard.children);
+    const used = kids.reduce((sum, k) => {
+      const cs = getComputedStyle(k);
+      return (
+        sum +
+        k.getBoundingClientRect().height +
+        parseFloat(cs.marginTop) +
+        parseFloat(cs.marginBottom)
+      );
+    }, 0);
+    const dead = Math.round(trayCard.getBoundingClientRect().height - used);
+    info.trayCard = {
+      card: Math.round(trayCard.getBoundingClientRect().height),
+      children: Math.round(used),
+      reportedWindowHeight: window.__trayHeight ?? null,
+      /* The fill of each bar, so a decorative one cannot pass: these are
+         positions in a cycle and must differ from each other and from 0. */
+      bars: Array.from(trayCard.querySelectorAll(".bar > i")).map((el) =>
+        Math.round((el.getBoundingClientRect().width /
+          el.parentElement.getBoundingClientRect().width) * 100),
+      ),
+    };
+    if (dead > 2) {
+      issues.push(
+        "tray card has " + dead + "px of dead space below its last child",
+      );
+    }
+  }
+
   const smallTargets = [];
   const interactive = document.querySelectorAll(
     "button, [role=switch], [role=button], a[href], input:not([type=hidden]), select, textarea, [data-slot=checkbox]"
@@ -392,27 +474,54 @@ const AUDIT = String.raw`(() => {
     issues.push("rail anchors with no target: " + info.deadAnchors.join(", "));
   }
 
-  // Two columns is the whole point of the wider window, and a stacked layout
-  // passed every other check: the rail was on top, the content was below it,
-  // nothing overflowed and nothing was clipped. Geometry has to be asserted, not
-  // inferred.
-  const rail = document.querySelector("aside");
+  // The tabs are in the titlebar and the content is below them. A stacked
+  // layout is the design, so the check is the opposite of a two-column one: the
+  // tab row must sit above the pane, the pane must start at the window's left
+  // edge (no rail reserving a column), and the tab row must be centred in the
+  // window rather than left-aligned against the brand.
+  const tabsRow = document.querySelector("[data-slot=tabs-list]");
   const pane = document.getElementById("settings-scroll");
-  info.columns = rail && pane
+  info.columns = tabsRow && pane
     ? {
-        railRight: Math.round(rail.getBoundingClientRect().right),
+        tabsBottom: Math.round(tabsRow.getBoundingClientRect().bottom),
+        tabsCentre: Math.round(
+          tabsRow.getBoundingClientRect().left +
+            tabsRow.getBoundingClientRect().width / 2,
+        ),
+        paneTop: Math.round(pane.getBoundingClientRect().top),
         paneLeft: Math.round(pane.getBoundingClientRect().left),
         paneWidth: Math.round(pane.getBoundingClientRect().width),
       }
     : null;
-  if (rail && pane) {
-    const r = rail.getBoundingClientRect();
-    const c = pane.getBoundingClientRect();
-    if (r.right > c.left + 1) {
-      issues.push("rail and pane are not side by side: rail ends at " + Math.round(r.right) + ", pane starts at " + Math.round(c.left));
+  if (tabsRow && pane) {
+    const t = tabsRow.getBoundingClientRect();
+    const p = pane.getBoundingClientRect();
+    if (t.bottom > p.top + 1) {
+      issues.push(
+        "tab row is not above the content: tabs end at " +
+          Math.round(t.bottom) +
+          ", content starts at " +
+          Math.round(p.top),
+      );
     }
-    if (c.width < 600) {
-      issues.push("content column is too narrow to be two-column: " + Math.round(c.width));
+    if (p.left > 24) {
+      issues.push(
+        "content is inset by " +
+          Math.round(p.left) +
+          "px, which is a rail by another name",
+      );
+    }
+    const centre = window.innerWidth / 2;
+    const tabsCentre = t.left + t.width / 2;
+    if (Math.abs(tabsCentre - centre) > 24) {
+      issues.push(
+        "tab row is off-centre by " +
+          Math.round(Math.abs(tabsCentre - centre)) +
+          "px",
+      );
+    }
+    if (p.width < 600) {
+      issues.push("content column is too narrow: " + Math.round(p.width));
     }
   }
 
@@ -466,7 +575,6 @@ const AUDIT = String.raw`(() => {
   }
   info.geometry = {
     tabsList: box(document.querySelector("[data-slot=tabs-list]")),
-    orbits: Array.from(document.querySelectorAll(".orbit")).map((el) => box(el)),
     navPill: box(document.querySelector("header")),
     firstSection: box(document.querySelector("section")),
     sheet: box(document.querySelector(".sheet-button")?.closest("div[style*=background]")),
@@ -479,7 +587,7 @@ const AUDIT = String.raw`(() => {
         return (el.getAttribute("aria-label") || "").split(",")[0] + " x" + Math.round(r.left) + " w" + Math.round(r.width);
       }),
     nowMarker: (() => {
-      const el = document.querySelector('[class*="bg-stamp"]');
+      const el = document.querySelector('[class*="bg-destructive"]');
       if (!el) return null;
       const cs = getComputedStyle(el);
       return { bg: cs.backgroundColor, w: Math.round(el.getBoundingClientRect().width), visible: visible(el) };
@@ -489,7 +597,8 @@ const AUDIT = String.raw`(() => {
       .map((el) => ((el.textContent || "").trim().slice(0, 14) || "icon") + " " + box(el).slice(2).join("x")),
   };
   return { issues, info };
-})()`;
+})();
+`;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const slug = (s) => s.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
@@ -641,7 +750,17 @@ async function main() {
       returnByValue: true,
     });
     const value = evaluated?.result?.result?.value ?? {
-      issues: ["audit did not run"],
+      /* The audit is one big expression; when it throws, CDP returns the
+         exception instead of a value, and "audit did not run" hid the reason.
+         Print it. */
+      issues: [
+        "audit did not run: " +
+          JSON.stringify(
+            evaluated?.result?.exceptionDetails?.exception?.description ??
+              evaluated?.result?.exceptionDetails ??
+              evaluated,
+          ).slice(0, 300),
+      ],
       info: {},
     };
     value.viewport = `${test.w}x${test.h}`;

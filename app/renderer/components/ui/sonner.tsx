@@ -1,30 +1,29 @@
-import { useTheme } from "next-themes";
 import { Toaster as Sonner, ToasterProps } from "sonner";
 
-/* Toasts are paper slips. Their colour and shape are set from index.css
-   against sonner's own data attributes, because the classes sonner lets you
-   pass have to be forced with `important` to beat its inline styles, and a
-   stylesheet beats an inline style without that fight. */
+/* The toast is the same sheet as a menu: opaque, one hairline, accent border
+   only when the news is bad. Sonner paints its own inline styles, so the
+   palette is handed over as its CSS variables rather than fought with
+   `important` in a stylesheet. `theme` is pinned dark: this app has one
+   appearance, and a light toast over the earth panel was the last surface still
+   changing colour with the OS. */
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme();
-
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme="dark"
       className="toaster group"
       style={
         {
-          "--normal-bg": "var(--paper-raised)",
-          "--normal-text": "var(--ink)",
-          "--normal-border": "var(--rule)",
-          "--border-radius": "var(--radius-lg)",
-          "--success-bg": "var(--paper-raised)",
-          "--success-text": "var(--ink)",
-          "--success-border": "var(--rule)",
-          "--error-bg": "var(--paper-raised)",
-          "--error-text": "var(--ink)",
-          "--error-border": "var(--stamp)",
-          "--font-family": "var(--font-serif)",
+          "--normal-bg": "var(--raised)",
+          "--normal-text": "var(--foreground)",
+          "--normal-border": "var(--border)",
+          "--success-bg": "var(--raised)",
+          "--success-text": "var(--foreground)",
+          "--success-border": "var(--border)",
+          "--error-bg": "var(--raised)",
+          "--error-text": "var(--foreground)",
+          "--error-border": "var(--destructive)",
+          "--border-radius": "12px",
+          "--font-family": "var(--font-sans)",
         } as React.CSSProperties
       }
       {...props}

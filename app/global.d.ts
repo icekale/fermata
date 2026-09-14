@@ -13,6 +13,12 @@ declare const ipcRenderer: {
   invokeSetAppInitialized: () => Promise<void>;
   invokeBreakStart: () => Promise<void>;
   invokeBreakEnd: () => Promise<void>;
+  invokeGetTrayStatus: () => Promise<import("./types/breaks").TrayStatus>;
+  invokeStartBreakNow: () => Promise<void>;
+  invokeSetBreaksEnabled: (enabled: boolean) => Promise<void>;
+  invokeOpenSettingsWindow: () => Promise<void>;
+  invokeHideTrayPopover: () => Promise<void>;
+  invokeResizeTrayPopover: (height: number) => Promise<void>;
   onPlayEndSound: (
     cb: (type: string, volume?: number) => void,
   ) => Promise<void>;
@@ -24,7 +30,7 @@ declare const ipcRenderer: {
 };
 
 declare const processEnv: {
-  [key: string]: string;
+  SNAP?: string;
 };
 
 declare const processPlatform: string;

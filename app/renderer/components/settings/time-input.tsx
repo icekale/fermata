@@ -1,4 +1,6 @@
 import { cn } from "@/lib/utils";
+import { useLocale, useT } from "@/i18n";
+import { formatDuration, formatMinuteOfDay } from "@/lib/format";
 import React, { KeyboardEvent, useEffect, useRef, useState } from "react";
 
 export interface TimeInputProps {
@@ -16,12 +18,13 @@ export default function TimeInput({
   disabled = false,
   className,
 }: TimeInputProps) {
+  const t = useT();
+  const locale = useLocale();
   const hoursRef = useRef<HTMLInputElement>(null);
   const minutesRef = useRef<HTMLInputElement>(null);
   const secondsRef = useRef<HTMLInputElement>(null);
 
   const [internalValue, setInternalValue] = useState(() => {
-    // Convert seconds to hours, minutes, seconds - pad with leading zeros
     const hours = Math.floor(value / 3600);
     const minutes = Math.floor((value % 3600) / 60);
     const seconds = value % 60;
@@ -32,10 +35,9 @@ export default function TimeInput({
     };
   });
 
-  // Track which field is currently focused to avoid formatting during user input
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
-  // Update internal value when external value changes (but not during user input)
   useEffect(() => {
     const hours = Math.floor(value / 3600);
     const minutes = Math.floor((value % 3600) / 60);
@@ -64,7 +66,6 @@ export default function TimeInput({
     const updated = { ...internalValue, [field]: newValue };
     setInternalValue(updated);
 
-    // Convert back to total seconds with validation
     const hours = Math.min(23, Math.max(0, parseInt(updated.hours) || 0));
     const minutes = Math.min(59, Math.max(0, parseInt(updated.minutes) || 0));
     const seconds =
@@ -110,7 +111,6 @@ export default function TimeInput({
       // Let tab work normally
     } else if (e.key === ":") {
       e.preventDefault();
-      // Move to next field when typing colon
       if (field === "hours" && minutesRef.current) {
         minutesRef.current.focus();
         minutesRef.current.select();
@@ -127,7 +127,6 @@ export default function TimeInput({
       e.currentTarget.value === "" &&
       e.currentTarget.selectionStart === 0
     ) {
-      // Move to previous field when backspacing at the beginning
       e.preventDefault();
       if (field === "minutes" && hoursRef.current) {
         hoursRef.current.focus();
@@ -143,13 +142,11 @@ export default function TimeInput({
     field: "hours" | "minutes" | "seconds",
     e: React.FocusEvent<HTMLInputElement>,
   ) => {
-    // Track focused field and select all text when focusing
     setFocusedField(field);
     e.target.select();
   };
 
   const handleBlur = (field: "hours" | "minutes" | "seconds") => {
-    // Clear focused field and format the value with leading zeros when focus is lost
     setFocusedField(null);
     const currentValue = internalValue[field];
     const formattedValue = (currentValue || "0").padStart(2, "0");
@@ -164,19 +161,23 @@ export default function TimeInput({
     field: "hours" | "minutes" | "seconds",
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
-    let rawValue = e.target.value;
-
-    // Only allow digits and limit length
-    let cleanValue = rawValue.replace(/[^0-9]/g, "");
+    let cleanValue = e.target.value.replace(/[^0-9]/g, "");
     if (cleanValue.length > 2) {
       cleanValue = cleanValue.slice(0, 2);
     }
 
-    // Update internal state - keep the raw value during typing
+    /* Snap an over-ceiling entry to the ceiling at once ("9" then "9" in the
+       hours box shows 23, not 99): the boxes must never display one thing
+       while the setting quietly holds another. */
+    const cap = field === "hours" ? 23 : 59;
+    const parsed = parseInt(cleanValue) || 0;
+    if (parsed > cap) {
+      cleanValue = String(cap);
+    }
+
     const updated = { ...internalValue, [field]: cleanValue };
     setInternalValue(updated);
 
-    // Convert to seconds and call onChange
     const hours = parseInt(updated.hours) || 0;
     const minutes = parseInt(updated.minutes) || 0;
     const seconds =
@@ -188,7 +189,6 @@ export default function TimeInput({
     );
     onChange(totalSeconds);
 
-    // Auto-advance to next field when 2 digits are entered
     if (cleanValue.length === 2) {
       setTimeout(() => {
         if (field === "hours" && minutesRef.current) {
@@ -206,69 +206,95 @@ export default function TimeInput({
     }
   };
 
+  /* Two modes, one control.
+
+     At rest the field is a single number — "28m", "09:00" — because that is
+     all the reader needs and the three-box "00h:28m:00s" form turned a tile
+     whose whole point was one figure into a row of six glyph groups. Clicking
+     it swaps in the three boxes, which is where the precision actually
+     belongs. */
+  if (editing === false) {
+    const label =
+      precision === "seconds"
+        ? formatDuration(value, locale)
+        : formatMinuteOfDay(Math.floor(value / 60));
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => {
+          setEditing(true);
+          requestAnimationFrame(() => hoursRef.current?.focus());
+        }}
+        aria-label={label}
+        className={cn(
+          "flex h-8 w-full items-center justify-start rounded-[10px] border border-transparent px-2 text-left",
+          "font-mono text-[13px] tnum text-foreground",
+          "transition-colors duration-150",
+          "hover:bg-black/[0.04] hover:border-border",
+          "outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20",
+          disabled && "cursor-not-allowed opacity-40",
+          className,
+        )}
+      >
+        {label}
+      </button>
+    );
+  }
+
+  const field = (
+    ref: React.RefObject<HTMLInputElement | null>,
+    key: "hours" | "minutes" | "seconds",
+    unit: string,
+  ) => (
+    <>
+      <input
+        ref={ref}
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        value={internalValue[key]}
+        onChange={(e) => handleInputChange(key, e)}
+        onKeyDown={(e) => handleKeyDown(key, e)}
+        onFocus={(e) => handleFocus(key, e)}
+        onBlur={() => handleBlur(key)}
+        disabled={disabled}
+        maxLength={2}
+        aria-label={unit}
+        className="h-5 w-5 min-w-0 shrink bg-transparent p-0 text-center outline-none"
+      />
+      <span className="shrink-0 font-sans text-[11px] leading-none text-muted-foreground">
+        {unit}
+      </span>
+    </>
+  );
+
   return (
     <div
+      onBlur={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        setEditing(false);
+      }}
       className={cn(
-        "inline-flex items-center justify-center rounded-[var(--radius-md)] border border-rule bg-paper-sunk px-3 py-2",
-        "font-[family-name:var(--font-serif)] text-[14px] tnum text-ink",
-        "transition-[border-color,box-shadow] duration-150 ease-[var(--ease-paper)]",
-        "has-[input:focus]:border-navy has-[input:focus]:shadow-[0_0_0_3px_var(--navy-wash)]",
-        disabled && "opacity-45 cursor-not-allowed",
+        "flex w-full min-w-0 items-center justify-center gap-0.5 rounded-[10px] border border-border bg-black/[0.03] px-2 py-1",
+        "font-mono text-[13px] tnum text-foreground",
+        "transition-all duration-150 ease-out",
+        "has-[input:focus]:border-primary has-[input:focus]:ring-2 has-[input:focus]:ring-primary/20",
+        disabled && "opacity-40",
         className,
       )}
     >
-      <input
-        ref={hoursRef}
-        type="text"
-        inputMode="numeric"
-        pattern="[0-9]*"
-        value={internalValue.hours}
-        onChange={(e) => handleInputChange("hours", e)}
-        onKeyDown={(e) => handleKeyDown("hours", e)}
-        onFocus={(e) => handleFocus("hours", e)}
-        onBlur={() => handleBlur("hours")}
-        disabled={disabled}
-        maxLength={2}
-        className="w-6 bg-transparent p-0 text-center outline-none"
-      />
-      <span className="self-end font-sans text-[11px] text-stone">h</span>
-
-      <span className="mx-0.5 text-stone">:</span>
-
-      <input
-        ref={minutesRef}
-        type="text"
-        inputMode="numeric"
-        pattern="[0-9]*"
-        value={internalValue.minutes}
-        onChange={(e) => handleInputChange("minutes", e)}
-        onKeyDown={(e) => handleKeyDown("minutes", e)}
-        onFocus={(e) => handleFocus("minutes", e)}
-        onBlur={() => handleBlur("minutes")}
-        disabled={disabled}
-        maxLength={2}
-        className="w-6 bg-transparent p-0 text-center outline-none"
-      />
-      <span className="self-end font-sans text-[11px] text-stone">m</span>
-
+      {field(hoursRef, "hours", t("unit.h"))}
+      <span className="shrink-0 px-px text-[11px] text-muted-foreground/60">
+        :
+      </span>
+      {field(minutesRef, "minutes", t("unit.m"))}
       {precision === "seconds" && (
         <>
-          <span className="mx-0.5 text-stone">:</span>
-          <input
-            ref={secondsRef}
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            value={internalValue.seconds}
-            onChange={(e) => handleInputChange("seconds", e)}
-            onKeyDown={(e) => handleKeyDown("seconds", e)}
-            onFocus={(e) => handleFocus("seconds", e)}
-            onBlur={() => handleBlur("seconds")}
-            disabled={disabled}
-            maxLength={2}
-            className="w-6 bg-transparent p-0 text-center outline-none"
-          />
-          <span className="self-end font-sans text-[11px] text-stone">s</span>
+          <span className="shrink-0 px-px text-[11px] text-muted-foreground/60">
+            :
+          </span>
+          {field(secondsRef, "seconds", t("unit.s"))}
         </>
       )}
     </div>

@@ -15,9 +15,6 @@ function PopoverTrigger({
   return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />;
 }
 
-/* A sheet laid over the page: raised paper, one hairline, the softest lift the
-   system has. It appears by settling, not by zooming — a popover that scales
-   reads as a web toy next to a printed surface. */
 function PopoverContent({
   className,
   align = "center",
@@ -31,11 +28,11 @@ function PopoverContent({
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          "z-50 w-72 origin-(--radix-popover-content-transform-origin) rounded-[var(--radius-lg)] p-4",
-          "border border-rule bg-paper-raised text-ink shadow-[var(--shadow-lift)]",
+          "z-50 w-72 origin-(--radix-popover-content-transform-origin) rounded-[12px] p-4",
+          "border border-border bg-raised text-popover-foreground shadow-[var(--shadow-lift)]",
           "outline-hidden",
-          "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1 data-[state=open]:duration-200",
-          "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-150",
+          "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:duration-150",
+          "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:duration-100",
           className,
         )}
         {...props}

@@ -16,10 +16,6 @@ function Tabs({
   );
 }
 
-/* The section index. mole.fit's nav is "a quiet translucent track with a
-   hairline border and no drop shadow" — that is exactly what a settings window
-   needs for its top-level sections, so rather than inventing a second pattern
-   the tab bar is that nav: parchment glass, one hairline, pills inside. */
 function TabsList({
   className,
   ...props
@@ -28,9 +24,7 @@ function TabsList({
     <TabsPrimitive.List
       data-slot="tabs-list"
       className={cn(
-        "inline-flex w-full items-center gap-1 rounded-full p-1",
-        "border border-rule-soft bg-[color-mix(in_srgb,var(--paper-raised)_72%,transparent)]",
-        "backdrop-blur-[14px]",
+        "inline-flex items-center gap-0 bg-transparent p-0",
         className,
       )}
       {...props}
@@ -46,15 +40,12 @@ function TabsTrigger({
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 py-1.5",
-        "font-[family-name:var(--font-serif)] text-[14px] font-medium",
-        "text-stone transition-[background-color,color] duration-150 ease-[var(--ease-paper)]",
-        "hover:bg-paper-sunk hover:text-ink-soft",
-        "data-[state=active]:bg-navy data-[state=active]:text-[color:var(--primary-foreground)]",
-        "data-[state=active]:hover:bg-navy",
-        "outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-navy",
-        "disabled:pointer-events-none disabled:opacity-45",
-        "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "inline-flex items-center justify-center whitespace-nowrap px-3 py-1.5",
+        "text-[13px] font-medium text-muted-foreground transition-colors duration-150",
+        "hover:text-foreground-soft",
+        "data-[state=active]:text-primary data-[state=active]:bg-transparent",
+        "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+        "disabled:pointer-events-none disabled:opacity-40",
         className,
       )}
       {...props}

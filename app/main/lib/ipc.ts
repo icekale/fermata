@@ -1,13 +1,19 @@
 import { BrowserWindow, ipcMain, IpcMainInvokeEvent, screen } from "electron";
 import log from "electron-log";
 import { IpcChannel } from "../../types/ipc";
-import { Settings, SoundType } from "../../types/settings";
+import { NotificationType, Settings, SoundType } from "../../types/settings";
 import {
   completeBreakTracking,
   getAllowPostpone,
   getBreakLengthSeconds,
+  getBreakTime,
+  getNextWindowOpenAt,
+  getTodayWindow,
   getTimeSinceLastBreak,
+  isHavingBreak,
+  checkInWorkingHours,
   postponeBreak,
+  startBreakNow,
   startBreakTracking,
   wasStartedFromTray,
 } from "./breaks";
@@ -18,7 +24,12 @@ import {
   setAppInitialized,
 } from "./store";
 import { buildTray } from "./tray";
-import { getWindows } from "./windows";
+import {
+  createSettingsWindow,
+  getWindows,
+  hideTrayPopover,
+  resizeTrayPopover,
+} from "./windows";
 
 export function sendIpc(channel: IpcChannel, ...args: unknown[]): void {
   const windows: BrowserWindow[] = getWindows();
@@ -150,3 +161,54 @@ ipcMain.handle(IpcChannel.AppInitializedSet, (): void => {
   log.info(IpcChannel.AppInitializedSet);
   setAppInitialized();
 });
+
+ipcMain.handle(IpcChannel.TrayStatusGet, () => {
+  const settings = getSettings();
+  const next = getBreakTime();
+  const window = getTodayWindow();
+  return {
+    todayFromMinutes: window.fromMinutes,
+    todayToMinutes: window.toMinutes,
+    nextWindowOpenAt: getNextWindowOpenAt(),
+    popup: settings.notificationType === NotificationType.Popup,
+    enabled: settings.breaksEnabled,
+    havingBreak: isHavingBreak(),
+    inWorkingHours: checkInWorkingHours(),
+    nextBreakAt: next ? next.valueOf() : null,
+    sinceLastBreakSeconds: getTimeSinceLastBreak(),
+    frequencySeconds: settings.breakFrequencySeconds,
+    lengthSeconds: settings.breakLengthSeconds,
+  };
+});
+
+ipcMain.handle(IpcChannel.BreakStartNow, (): void => {
+  log.info(IpcChannel.BreakStartNow);
+  startBreakNow();
+});
+
+ipcMain.handle(
+  IpcChannel.BreaksEnabledSet,
+  (_event: IpcMainInvokeEvent, enabled: boolean): void => {
+    log.info(IpcChannel.BreaksEnabledSet, enabled);
+    const settings = getSettings();
+    setSettings({ ...settings, breaksEnabled: enabled });
+    buildTray();
+  },
+);
+
+ipcMain.handle(IpcChannel.SettingsWindowOpen, (): void => {
+  hideTrayPopover();
+  createSettingsWindow();
+});
+
+ipcMain.handle(IpcChannel.TrayPopoverHide, (): void => {
+  hideTrayPopover();
+});
+
+ipcMain.handle(
+  IpcChannel.TrayPopoverResize,
+  (_event: IpcMainInvokeEvent, height: number): void => {
+    log.info(IpcChannel.TrayPopoverResize, height);
+    resizeTrayPopover(height);
+  },
+);

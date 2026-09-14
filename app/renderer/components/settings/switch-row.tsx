@@ -19,7 +19,7 @@ export default function SwitchRow({
 }: SwitchRowProps) {
   return (
     <div className="flex items-center justify-between gap-6">
-      <span className="font-sans text-[13px] leading-[1.5] text-olive">
+      <span className="font-sans text-[13px] leading-[1.5] text-foreground-soft">
         {label}
       </span>
       <Switch

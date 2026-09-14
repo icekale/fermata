@@ -158,10 +158,13 @@ export default function ShiftBand({
           className={[
             "band-in absolute inset-y-[3px] flex items-center justify-center overflow-hidden rounded-[4px]",
             "font-sans text-[11px] whitespace-nowrap select-none",
-            "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy",
+            /* Keyboard focus is the global gold ring from index.css. This used
+               to name a `navy` token that no longer exists, which left the
+               ring at currentColor — dark brown on the near-black track, i.e.
+               invisible. */
             enabled
-              ? "cursor-grab touch-none bg-navy text-[color:var(--primary-foreground)] active:cursor-grabbing"
-              : "pointer-events-none border border-dashed border-stone/45 text-transparent",
+              ? "cursor-grab touch-none bg-primary text-[color:var(--primary-foreground)] active:cursor-grabbing"
+              : "pointer-events-none border border-dashed text-transparent",
             dragging ? "shadow-[var(--shadow-lift)]" : "",
           ].join(" ")}
           style={{ left: `${left}%`, width: `${width}%` }}
@@ -177,13 +180,13 @@ export default function ShiftBand({
       <PopoverContent align="start" side="bottom" className="w-[320px]">
         <div className="space-y-4">
           <div className="flex items-baseline justify-between">
-            <h4 className="text-[15px] text-ink">{t(day.labelKey)}</h4>
-            <span className="u-label">{t("ledger.shift")}</span>
+            <h3 className="text-[15px] text-foreground">{t(day.labelKey)}</h3>
+            <span className="tile-label">{t("ledger.shift")}</span>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="space-y-2">
-              <span className="u-label block">{t("ledger.shiftFrom")}</span>
+              <span className="tile-label block">{t("ledger.shiftFrom")}</span>
               <TimeInput
                 precision="minutes"
                 value={minutesToSeconds(from)}
@@ -192,7 +195,7 @@ export default function ShiftBand({
               />
             </label>
             <label className="space-y-2">
-              <span className="u-label block">{t("ledger.shiftUntil")}</span>
+              <span className="tile-label block">{t("ledger.shiftUntil")}</span>
               <TimeInput
                 precision="minutes"
                 value={minutesToSeconds(to)}
@@ -202,7 +205,7 @@ export default function ShiftBand({
             </label>
           </div>
 
-          <div className="flex items-center gap-1 border-t border-rule-soft pt-3">
+          <div className="flex items-center gap-1 border-t border-border-soft pt-3">
             {canAdd && (
               <Button size="sm" variant="ghost" onClick={onAdd}>
                 <IconPlus className="size-3.5" />
@@ -217,7 +220,7 @@ export default function ShiftBand({
                   onRemove();
                   setOpen(false);
                 }}
-                className="text-destructive hover:bg-stamp-tint hover:text-destructive"
+                className="text-destructive hover:text-destructive"
               >
                 <IconTrash className="size-3.5" />
                 {t("ledger.remove")}
@@ -225,8 +228,8 @@ export default function ShiftBand({
             )}
           </div>
 
-          <div className="border-t border-rule-soft pt-3">
-            <span className="u-label">{t("ledger.copyTo")}</span>
+          <div className="border-t border-border-soft pt-3">
+            <span className="tile-label">{t("ledger.copyTo")}</span>
             <div className="mt-2.5 grid grid-cols-4 gap-x-2 gap-y-2.5">
               {daysConfig.map((other) => {
                 const isSelf = other.key === day.key;
@@ -248,7 +251,7 @@ export default function ShiftBand({
                       }}
                       aria-label={t(other.labelKey)}
                     />
-                    <span className="font-sans text-[12px] text-olive">
+                    <span className="font-sans text-[12px] text-foreground-soft">
                       {t(other.shortKey)}
                     </span>
                   </label>

@@ -60,7 +60,7 @@ export default function WorkingHoursSettings({
 
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-[40px_1fr_36px] items-end gap-x-3">
+      <div className="grid grid-cols-[40px_1fr_38px] items-end gap-x-3">
         <span />
         <div className="relative h-4">
           {HOUR_MARKS.map((hour, index) => {
@@ -70,7 +70,7 @@ export default function WorkingHoursSettings({
               <span
                 key={hour}
                 className={cn(
-                  "tnum absolute bottom-0 font-sans text-[11px] leading-none text-stone",
+                  "tnum absolute bottom-0 font-sans text-[11px] leading-none text-muted-foreground",
                   isFirst && "left-0",
                   isLast && "right-0",
                   isFirst === false && isLast === false && "-translate-x-1/2",
@@ -104,9 +104,9 @@ export default function WorkingHoursSettings({
         ))}
       </div>
 
-      <p className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-2 font-sans text-[12px] leading-none text-stone">
+      <p className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-2 font-sans text-[12px] leading-none text-muted-foreground">
         <span className="flex items-center gap-1.5">
-          <span aria-hidden="true" className="h-3 w-px bg-stamp" />
+          <span aria-hidden="true" className="h-3 w-px bg-destructive" />
           {t("ledger.now")}
         </span>
         <span>{t("ledger.drag")}</span>
@@ -172,11 +172,11 @@ function DayRow({
   const t = useT();
 
   return (
-    <div className="grid grid-cols-[40px_1fr_36px] items-center gap-x-3">
+    <div className="grid grid-cols-[40px_1fr_38px] items-center gap-x-3">
       <span
         className={cn(
           "font-sans text-[13px] leading-none",
-          inactive ? "text-stone" : "text-ink",
+          inactive ? "text-muted-foreground" : "text-foreground",
         )}
       >
         {t(day.shortKey)}
@@ -184,7 +184,7 @@ function DayRow({
 
       <div
         className={cn(
-          "relative h-8 rounded-[var(--radius-sm)] bg-paper-sunk ring-1 ring-rule ring-inset",
+          "relative h-8 rounded-[var(--radius-sm)] bg-well ring-1 ring-border ring-inset",
           disabled && "opacity-55",
         )}
       >
@@ -192,7 +192,7 @@ function DayRow({
           <span
             key={hour}
             aria-hidden="true"
-            className="absolute inset-y-0 w-px bg-rule-soft"
+            className="absolute inset-y-0 w-px bg-border-soft"
             style={{ left: `${(hour / 24) * 100}%` }}
           />
         ))}
@@ -216,14 +216,14 @@ function DayRow({
           aria-hidden="true"
           className={cn(
             "pointer-events-none absolute inset-y-0 w-px",
-            isToday ? "bg-stamp" : "bg-stamp/30",
+            isToday ? "bg-destructive" : "bg-destructive/30",
           )}
           style={{ left: `${nowPercent}%` }}
         />
         {isToday && (
           <span
             aria-hidden="true"
-            className="now-dot pointer-events-none absolute -top-[3px] size-[5px] rounded-full bg-stamp"
+            className="now-dot pointer-events-none absolute -top-[3px] size-[5px] rounded-full bg-destructive"
             style={{ left: `${nowPercent}%` }}
           />
         )}

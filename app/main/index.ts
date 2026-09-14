@@ -9,7 +9,11 @@ import { showNotification } from "./lib/notifications";
 import { getAppInitialized } from "./lib/store";
 import { t } from "./lib/l10n";
 import { initTray } from "./lib/tray";
-import { createSettingsWindow, createSoundsWindow } from "./lib/windows";
+import {
+  createSettingsWindow,
+  createSoundsWindow,
+  initTrayPopover,
+} from "./lib/windows";
 
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -156,11 +160,10 @@ app.on("ready", async () => {
     app.setAppUserModelId("app.fermata.timer");
   }
 
+  const appInitialized = getAppInitialized();
   if (process.platform === "darwin") {
     app.dock?.hide();
   }
-
-  const appInitialized = getAppInitialized();
 
   if (!appInitialized) {
     if (process.env.NODE_ENV !== "development") {
@@ -169,13 +172,12 @@ app.on("ready", async () => {
     // Show settings window on first launch instead of notification
     createSettingsWindow();
     // Don't set app as initialized yet - we'll do that after the user dismisses the modal
-  } else {
-    // App has been initialized before, don't show settings automatically
   }
 
   initBreaks();
   initTray();
   createSoundsWindow();
+  initTrayPopover();
 
   if (process.env.NODE_ENV !== "development") {
     checkForUpdates();

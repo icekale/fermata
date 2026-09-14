@@ -4,39 +4,47 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
 
-/* Every button is a pill. The paper world has exactly two button shapes: the
-   filled pill (a noun: Save, Apply) and the hairline pill (a verb you can take
-   back). Anything else — grey fills, drop shadows, 6px corners — is chrome the
-   reference world does not have. */
+/* One button, both surfaces.
+
+   The popover's actions were plain <button> elements with their own CSS while
+   the window used this component, so "the primary action" was gold in one place
+   and green in the other. A control that means the same thing in two surfaces
+   is the same control; the tray renders <Button size="sm"> now.
+
+   Fills: primary is the accent (gold) — reserved for the action a surface
+   exists to offer. The wash is the quiet fill, and `ghost` is for the third
+   action in a row. Green is NOT a button colour: it means "running" or
+   "progress" everywhere else, and a colour cannot mean two things. */
 const buttonVariants = cva(
   [
-    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full",
-    "font-[family-name:var(--font-serif)] font-medium",
-    "transition-[background-color,border-color,color,transform] duration-150 ease-[var(--ease-paper)]",
-    "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy",
-    "disabled:pointer-events-none disabled:opacity-45",
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[10px]",
+    "font-sans font-medium",
+    "transition-[background-color,color,opacity,transform] duration-150 ease-[var(--ease-paper)]",
+    "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+    "disabled:pointer-events-none disabled:opacity-40",
     "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   ].join(" "),
   {
     variants: {
       variant: {
         default:
-          "border-[1.5px] border-navy bg-navy text-[color:var(--primary-foreground)] hover:border-navy-light hover:bg-navy-light hover:-translate-y-px active:translate-y-0",
-        outline:
-          "border-[1.5px] border-navy bg-transparent text-navy hover:bg-navy-tint hover:-translate-y-px active:translate-y-0",
-        ghost:
-          "border-[1.5px] border-transparent bg-transparent text-ink-soft hover:bg-paper-sunk hover:text-ink",
+          "bg-primary text-primary-foreground hover:brightness-105 active:scale-[0.97]",
         secondary:
-          "border-[1.5px] border-transparent bg-sand text-ink-soft hover:bg-rule-soft hover:text-ink",
+          "bg-wash text-foreground-soft hover:bg-wash-hover active:scale-[0.97]",
+        outline:
+          "border border-border bg-transparent text-foreground-soft hover:bg-wash",
+        ghost:
+          "bg-transparent text-muted-foreground hover:bg-wash hover:text-foreground-soft",
         destructive:
-          "border-[1.5px] border-stamp bg-stamp text-[color:var(--paper-raised)] hover:brightness-90",
-        link: "text-navy underline decoration-navy/35 underline-offset-4 hover:decoration-navy",
+          "bg-destructive text-destructive-foreground hover:brightness-105 active:scale-[0.97]",
+        link: "bg-transparent text-primary hover:underline underline-offset-4",
       },
       size: {
-        default: "h-9 px-5 text-[14px] has-[>svg]:pr-3.5",
-        sm: "h-7.5 px-3.5 font-sans text-[13px] has-[>svg]:pr-2.5",
-        lg: "h-10.5 px-6 text-[15px] has-[>svg]:pr-4",
-        icon: "size-8 text-[13px]",
+        sm: "h-8 px-3 text-[12px]",
+        default: "h-9 px-4 text-[13px]",
+        lg: "h-10 px-5 text-[13px]",
+        icon: "size-8",
+        quiet: "h-8 w-full justify-start px-3 text-[12px] font-normal",
       },
     },
     defaultVariants: {

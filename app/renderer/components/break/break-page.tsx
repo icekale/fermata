@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+import { motion, MotionConfig } from "framer-motion";
 import moment from "moment";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "@/i18n";
@@ -13,19 +13,6 @@ interface BreakPageProps {
   sharedBreakEndTime: number | null;
 }
 
-/* The break itself: a sheet of paper on a darkened desk.
-
-   Everything here follows from one decision — the countdown is the text, not
-   an ornament next to it. The old screen put the remaining time in 14px at the
-   right end of a 2px bar, which is the smallest element on a page whose only
-   job is to tell you how long you have left. Here it is the largest thing on
-   the sheet, set at the size a folio number would be, and the progress rule
-   runs the full width above it as a hairline that fills in ink.
-
-   The sheet fills the window; the veil is what is behind the window. With the
-   veil on, the window is the whole screen and the sheet sits inset on it, so
-   the app is the only thing you can see. With the veil off, the window is a
-   small card and the sheet is that card. */
 export function BreakPage({
   settings,
   endBreakEnabled,
@@ -38,10 +25,6 @@ export function BreakPage({
   );
   const [progress, setProgress] = useState<number | null>(null);
   const [endClock, setEndClock] = useState<string | null>(null);
-  /* The clock is set, not switched on: on arrival the digits run up from zero
-     to the break's length in about two thirds of a second and then settle into
-     counting down. It is the one moment this screen has to say "this has
-     started", and a mechanical counter coming to rest says it without a word. */
   const [windUp, setWindUp] = useState(0);
   const t = useT();
   const breakStartTime = useRef(new Date());
@@ -67,6 +50,11 @@ export function BreakPage({
     );
     return windowId === "0" || windowId === null;
   }, []);
+
+  /* No keydown handler here on purpose: break windows are created focusable:
+     false (app/main/lib/windows.ts) so they never steal focus from the work
+     they interrupt, which also means no key event can ever reach this page.
+     The buttons are the way out, and they are one click. */
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
@@ -114,7 +102,9 @@ export function BreakPage({
         });
 
         if (closingRef.current === false) {
-          timeoutId = setTimeout(tick, 50);
+          /* The clock reads mm:ss; ticking faster than 4 Hz renders digits
+             that cannot change and re-renders the whole sheet for it. */
+          timeoutId = setTimeout(tick, 250);
         }
       };
 
@@ -131,8 +121,8 @@ export function BreakPage({
   }
 
   const ink = settings.textColor;
-  const muted = `color-mix(in srgb, ${ink} 62%, transparent)`;
-  const faint = `color-mix(in srgb, ${ink} 22%, transparent)`;
+  const muted = `color-mix(in srgb, ${ink} 65%, transparent)`;
+  const faint = `color-mix(in srgb, ${ink} 18%, transparent)`;
   const settledSeconds = Math.floor(
     timeRemaining.hours * 3600 +
       timeRemaining.minutes * 60 +
@@ -145,115 +135,115 @@ export function BreakPage({
   const veilOn = settings.showBackdrop;
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-transparent">
-      {veilOn && (
-        <motion.div
-          aria-hidden="true"
-          className="absolute inset-0"
-          style={{ backgroundColor: settings.veilColor }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: closing ? 0 : settings.backdropOpacity }}
-          transition={{ duration: 0.5, delay: closing ? 0.3 : 0 }}
-        />
-      )}
+    <MotionConfig reducedMotion="user">
+      <div className="relative h-full w-full overflow-hidden bg-transparent select-none">
+        {veilOn && (
+          <motion.div
+            aria-hidden="true"
+            className="absolute inset-0 backdrop-blur-md"
+            style={{ backgroundColor: settings.veilColor }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: closing ? 0 : settings.backdropOpacity }}
+            transition={{ duration: 0.4, delay: closing ? 0.2 : 0 }}
+          />
+        )}
 
-      <div
-        className="relative flex h-full w-full items-center justify-center"
-        style={{ padding: veilOn ? "clamp(0px, 4.5vmin, 64px)" : 0 }}
-      >
-        <motion.div
-          className="break-sheet relative flex flex-col"
+        <div
+          className="relative flex h-full w-full items-center justify-center"
+          /* The sheet is a card in both modes. Veil on: it floats on the veil.
+             Veil off: it floats on the desktop — the padding gives its shadow
+             room, since a shadow is the OS's to draw outside the window and a
+             window-edge cut turns it back into a square frame. */
           style={{
-            backgroundColor: settings.backgroundColor,
-            color: ink,
-            borderRadius: veilOn ? "var(--radius-lg)" : 0,
-            boxShadow: veilOn ? "var(--shadow-veil)" : "none",
+            padding: veilOn
+              ? "clamp(16px, 4.5vmin, 64px)"
+              : "clamp(16px, 4vmin, 32px)",
           }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: closing ? 0 : 1, y: closing ? -16 : 0 }}
-          transition={{ duration: 0.5, delay: closing ? 0 : 0.4 }}
         >
-          <header className="flex items-baseline justify-between gap-4 px-7 pt-7">
-            <span className="u-label" style={{ color: muted }}>
-              {t("break.eyebrow")}
-            </span>
-            {endClock && (
-              <span className="u-label tnum" style={{ color: muted }}>
-                {t("break.ends", { time: endClock })}
-              </span>
-            )}
-          </header>
-
-          <div
-            className="mt-4 h-px w-full"
-            style={{ backgroundColor: faint }}
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(progress * 100)}
-            aria-label={t("break.progress")}
+          <motion.div
+            className="break-sheet relative flex flex-col overflow-hidden"
+            style={{
+              backgroundColor: settings.backgroundColor,
+              color: ink,
+              borderRadius: "24px",
+              boxShadow: veilOn ? "var(--shadow-veil)" : "var(--shadow-lift)",
+              border:
+                "1px solid color-mix(in srgb, currentColor 12%, transparent)",
+            }}
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: closing ? 0 : 1, scale: closing ? 0.97 : 1 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
           >
-            {/* No width transition on purpose. The tick already re-renders
-                this every 50ms and the rule moves 0.04% per tick, so a
-                transition would be re-targeted before it ever finished — a
-                layout-animating property bought for smoothness that was
-                already there. */}
-            <div
-              className="h-full"
-              style={{ width: `${progress * 100}%`, backgroundColor: ink }}
-            />
-          </div>
-
-          {/* The same 4px star that drifts along the settings dividers, here
-              marking the point in the break that the reader has actually
-              reached. One mark, two jobs: a page's ornament in the window, a
-              position in time on the sheet. */}
-          <div className="relative h-0 w-full" aria-hidden="true">
-            <span
-              className="progress-star absolute size-[5px] rounded-full"
-              style={{
-                left: `${progress * 100}%`,
-                top: 0,
-                backgroundColor: ink,
-              }}
-            />
-          </div>
-
-          <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
-            <span
-              className="break-clock tnum leading-[0.85] tracking-[-0.03em]"
-              style={{ color: ink }}
-            >
-              {clock}
-            </span>
-            <h1
-              className="mt-7 max-w-[22ch] text-[20px] leading-[1.3] text-balance"
-              style={{ color: ink }}
-            >
-              {settings.breakTitle}
-            </h1>
-            <p
-              className="mt-3.5 max-w-[36ch] text-[15px] leading-[1.7] whitespace-pre-line"
-              style={{ color: muted }}
-            >
-              {settings.breakMessage}
-            </p>
-          </div>
-
-          {endBreakEnabled && (
-            <div className="flex justify-center pb-8">
-              <button
-                type="button"
-                className="sheet-button"
-                style={{ color: ink }}
-                onClick={onEndBreak}
+            <header className="flex items-baseline justify-between gap-4 px-8 pt-7">
+              <span
+                className="tile-label font-sans text-xs font-semibold tracking-wider"
+                style={{ color: muted }}
               >
-                {progress < 0.5 ? t("break.cancel") : t("break.end")}
-              </button>
+                {t("break.eyebrow")}
+              </span>
+              {endClock && (
+                <span
+                  className="tile-label tnum text-xs font-medium"
+                  style={{ color: muted }}
+                >
+                  {t("break.ends", { time: endClock })}
+                </span>
+              )}
+            </header>
+
+            <div
+              className="mt-4 h-1 w-full overflow-hidden"
+              style={{ backgroundColor: faint }}
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(progress * 100)}
+              aria-label={t("break.progress")}
+            >
+              <div
+                className="h-full transition-all duration-75"
+                style={{ width: `${progress * 100}%`, backgroundColor: ink }}
+              />
             </div>
-          )}
-        </motion.div>
+
+            <div className="flex flex-1 flex-col items-center justify-center px-8 py-10 text-center">
+              {/* One typographic voice for the countdown: the same sans with
+                  tabular figures as every other numeral in the app. The mono
+                  face was a costume the protagonist wore only onstage. */}
+              <span className="break-clock" style={{ color: ink }}>
+                {clock}
+              </span>
+              <h1
+                className="mt-6 max-w-[26ch] text-[22px] font-bold leading-snug tracking-tight text-balance"
+                style={{ color: ink }}
+              >
+                {settings.breakTitle || t("break.defaultTitle")}
+              </h1>
+              <p
+                className="mt-3 max-w-[40ch] text-[14px] leading-relaxed whitespace-pre-line"
+                style={{ color: muted }}
+              >
+                {settings.breakMessage || t("break.defaultMessage")}
+              </p>
+            </div>
+
+            {endBreakEnabled && (
+              <div className="flex justify-center pb-8">
+                <button
+                  type="button"
+                  className="sheet-button gap-1.5"
+                  style={{ color: ink }}
+                  onClick={onEndBreak}
+                >
+                  <span>
+                    {progress < 0.5 ? t("break.cancel") : t("break.end")}
+                  </span>
+                </button>
+              </div>
+            )}
+          </motion.div>
+        </div>
       </div>
-    </div>
+    </MotionConfig>
   );
 }

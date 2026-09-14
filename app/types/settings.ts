@@ -121,11 +121,14 @@ export const defaultSettings: Settings = {
   idleResetNotification: false,
   soundType: SoundType.Gong,
   breakSoundVolume: 1,
-  breakTitle: "Time for a break.",
-  breakMessage: "Rest your eyes.\nStretch your legs.\nBreathe. Relax.",
-  backgroundColor: "#f5f4ed",
-  textColor: "#141413",
-  veilColor: "#33302a",
+  /* Empty means "say the shipped line, translated". Storing the English
+     sentence here is what put "Time for a break." in the middle of a Chinese
+     window; the reader's own words go in the same field and win. */
+  breakTitle: "",
+  breakMessage: "",
+  backgroundColor: "#2a241c",
+  textColor: "#e8ca8d",
+  veilColor: "#14110c",
   showBackdrop: true,
   backdropOpacity: 0.7,
   endBreakEnabled: true,

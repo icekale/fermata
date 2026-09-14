@@ -9,7 +9,9 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 process.once("loaded", () => {
-  contextBridge.exposeInMainWorld("processEnv", { ...process.env });
+  /* Only the one flag the renderer reads. Spreading the whole process.env
+     over the bridge handed every environment secret to every window. */
+  contextBridge.exposeInMainWorld("processEnv", { SNAP: process.env.SNAP });
   contextBridge.exposeInMainWorld("processPlatform", process.platform);
   contextBridge.exposeInMainWorld("ipcRenderer", {
     invokeBreakPostpone: (action) => {
@@ -56,6 +58,24 @@ process.once("loaded", () => {
     },
     invokeBreakEnd: () => {
       return ipcRenderer.invoke("BREAK_END");
+    },
+    invokeGetTrayStatus: () => {
+      return ipcRenderer.invoke("TRAY_STATUS_GET");
+    },
+    invokeStartBreakNow: () => {
+      return ipcRenderer.invoke("BREAK_START_NOW");
+    },
+    invokeSetBreaksEnabled: (enabled) => {
+      return ipcRenderer.invoke("BREAKS_ENABLED_SET", enabled);
+    },
+    invokeOpenSettingsWindow: () => {
+      return ipcRenderer.invoke("SETTINGS_WINDOW_OPEN");
+    },
+    invokeHideTrayPopover: () => {
+      return ipcRenderer.invoke("TRAY_POPOVER_HIDE");
+    },
+    invokeResizeTrayPopover: (height) => {
+      return ipcRenderer.invoke("TRAY_POPOVER_RESIZE", height);
     },
     onPlayStartSound: (cb) => {
       ipcRenderer.on("SOUND_START_PLAY", (_event, type, volume = 1) => {

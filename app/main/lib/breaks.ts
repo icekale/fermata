@@ -287,6 +287,80 @@ export function checkInWorkingHours(): boolean {
   return checkInWorkingHoursAt(moment(), getSettings());
 }
 
+/* Today's window, for the menu-bar HUD: the reader there wants the hours, not
+   the answer "yes". First range only: a split shift cannot be summarised in a caption, and the first range is the one that matters in that glance. */
+export function getTodayWindow(): {
+  fromMinutes: number | null;
+  toMinutes: number | null;
+} {
+  const settings = getSettings();
+  if (settings.workingHoursEnabled === false) {
+    return { fromMinutes: null, toMinutes: null };
+  }
+
+  const dayMap: { [key: number]: DayConfig["key"] } = {
+    0: "workingHoursSunday",
+    1: "workingHoursMonday",
+    2: "workingHoursTuesday",
+    3: "workingHoursWednesday",
+    4: "workingHoursThursday",
+    5: "workingHoursFriday",
+    6: "workingHoursSaturday",
+  };
+  const today = settings[dayMap[moment().day()]];
+  if (today.enabled === false || today.ranges.length === 0) {
+    return { fromMinutes: null, toMinutes: null };
+  }
+  return {
+    fromMinutes: today.ranges[0].fromMinutes,
+    toMinutes: today.ranges[0].toMinutes,
+  };
+}
+
+/* The next instant the working window begins, walking forward across days:
+   the HUD's hero counts down to it while breaks are quiet, so "outside hours"
+   still has one living number. Null when working hours are off or no day is
+   enabled. */
+export function getNextWindowOpenAt(): number | null {
+  const settings = getSettings();
+  if (!settings.workingHoursEnabled) {
+    return null;
+  }
+
+  const dayMap: { [key: number]: DayConfig["key"] } = {
+    0: "workingHoursSunday",
+    1: "workingHoursMonday",
+    2: "workingHoursTuesday",
+    3: "workingHoursWednesday",
+    4: "workingHoursThursday",
+    5: "workingHoursFriday",
+    6: "workingHoursSaturday",
+  };
+
+  const now = moment();
+  const currentMinutes = now.hours() * 60 + now.minutes();
+  /* Today first, then the following days; a week with no enabled day walks
+     off the end and answers null. */
+  for (let offset = 0; offset < 8; offset++) {
+    const day = settings[dayMap[now.clone().add(offset, "days").day()]];
+    if (!day.enabled) continue;
+    const start = day.ranges
+      .map((range) => range.fromMinutes)
+      .filter((from) => offset > 0 || from > currentMinutes)
+      .sort((a, b) => a - b)[0];
+    if (start === undefined) continue;
+    return now
+      .clone()
+      .add(offset, "days")
+      .hours(Math.floor(start / 60))
+      .minutes(start % 60)
+      .seconds(0)
+      .milliseconds(0)
+      .valueOf();
+  }
+  return null;
+}
+
 enum IdleState {
   Active = "active",
   Idle = "idle",

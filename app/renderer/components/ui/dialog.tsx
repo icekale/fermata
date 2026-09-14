@@ -28,9 +28,6 @@ function DialogClose({
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
 }
 
-/* The veil is Mole's fur brown-black, not a neutral grey scrim: dimming a paper
-   surface with pure black turns it cold, and the whole point of the palette is
-   that nothing in it is cold. */
 function DialogOverlay({
   className,
   ...props
@@ -39,7 +36,7 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-[color-mix(in_srgb,var(--mole)_52%,transparent)]",
+        "fixed inset-0 z-50 bg-black/55",
         "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-200",
         "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-150",
         className,
@@ -64,10 +61,10 @@ function DialogContent({
         data-slot="dialog-content"
         className={cn(
           "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%]",
-          "gap-5 rounded-[var(--radius-xl)] border border-rule bg-paper-raised p-6",
+          "gap-5 rounded-[14px] border border-border bg-raised p-6",
           "shadow-[var(--shadow-veil)]",
-          "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1 data-[state=open]:duration-250",
-          "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-150",
+          "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:duration-200",
+          "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:duration-150",
           "sm:max-w-lg",
           className,
         )}
@@ -79,8 +76,8 @@ function DialogContent({
             data-slot="dialog-close"
             className={cn(
               "absolute top-4 right-4 inline-flex size-7 items-center justify-center rounded-full",
-              "text-stone transition-colors hover:bg-paper-sunk hover:text-ink",
-              "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy",
+              "text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+              "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
               "disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
             )}
           >
@@ -97,7 +94,10 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2 text-center sm:text-left", className)}
+      className={cn(
+        "flex flex-col gap-1.5 text-center sm:text-left",
+        className,
+      )}
       {...props}
     />
   );
@@ -124,7 +124,7 @@ function DialogTitle({
     <DialogPrimitive.Title
       data-slot="dialog-title"
       className={cn(
-        "font-[family-name:var(--font-serif)] text-[20px] leading-[1.25] font-medium text-ink",
+        "font-sans text-[18px] leading-snug font-semibold text-foreground tracking-tight",
         className,
       )}
       {...props}
@@ -140,7 +140,7 @@ function DialogDescription({
     <DialogPrimitive.Description
       data-slot="dialog-description"
       className={cn(
-        "font-[family-name:var(--font-serif)] text-[14px] leading-[1.6] text-olive",
+        "font-sans text-[13px] leading-relaxed text-muted-foreground",
         className,
       )}
       {...props}

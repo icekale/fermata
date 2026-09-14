@@ -2,6 +2,7 @@ import { app, dialog, Menu, Tray } from "electron";
 import log from "electron-log";
 import moment from "moment";
 import path from "path";
+import fs from "fs";
 import packageJson from "../../../package.json";
 import { TrayTextMode } from "../../types/settings";
 import {
@@ -18,17 +19,17 @@ import {
   setDisableEndTime,
   setSettings,
 } from "./store";
-import { closeBreakWindows, createSettingsWindow } from "./windows";
+import {
+  closeBreakWindows,
+  createSettingsWindow,
+  hideTrayPopover,
+  toggleTrayPopover,
+} from "./windows";
 import { t } from "./l10n";
 
 let tray: Tray;
+let trayMenu: Menu | null = null;
 let lastMinsLeft = 0;
-
-const rootPath = path.dirname(app.getPath("exe"));
-const resourcesPath =
-  process.platform === "darwin"
-    ? path.resolve(rootPath, "..", "Resources")
-    : rootPath;
 
 function checkDisableTimeout() {
   const disableEndTime = getDisableEndTime();
@@ -106,26 +107,33 @@ function getTrayTitle(): string | null {
 
 export function buildTray(): void {
   if (!tray) {
-    let imgPath;
-
-    if (process.platform === "darwin") {
-      imgPath =
-        process.env.NODE_ENV === "development"
-          ? "resources/tray/tray-IconTemplate.png"
-          : path.join(resourcesPath, "tray", "tray-IconTemplate.png");
-    } else {
-      imgPath =
-        process.env.NODE_ENV === "development"
-          ? "resources/tray/icon.png"
-          : path.join(app.getAppPath(), "..", "tray", "icon.png");
+    const isDarwin = process.platform === "darwin";
+    const iconName = isDarwin ? "tray-iconTemplate.png" : "icon.png";
+    const candidates = [
+      path.join(__dirname, "../../../resources/tray", iconName),
+      path.join(__dirname, "../../resources/tray", iconName),
+      path.join(app.getAppPath(), "resources/tray", iconName),
+      path.join(process.resourcesPath, "app/resources/tray", iconName),
+      path.join(process.resourcesPath, "tray", iconName),
+      path.resolve(process.cwd(), "resources/tray", iconName),
+    ];
+    let imgPath = candidates[0];
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        imgPath = p;
+        break;
+      }
     }
-
     tray = new Tray(imgPath);
-
-    // On windows, context menu will not show on left click by default
-    if (process.platform === "win32") {
-      tray.on("click", () => {
-        tray.popUpContextMenu();
+    tray.on("click", () => {
+      toggleTrayPopover(tray);
+    });
+    /* Linux needs the menu attached with setContextMenu (below); on macOS and
+       Windows it is popped up here, so the left click can own the HUD. */
+    if (process.platform !== "linux") {
+      tray.on("right-click", () => {
+        hideTrayPopover();
+        if (trayMenu) tray.popUpContextMenu(trayMenu);
       });
     }
   }
@@ -177,8 +185,8 @@ export function buildTray(): void {
     dialog.showMessageBox({
       title: t("tray.aboutTitle"),
       type: "info",
-      message: `Fermata`,
-      detail: `Build: ${packageJson.version}\n\nWebsite:\nhttps://breaktimer.app\n\nSource Code:\nhttps://github.com/tom-james-watson/breaktimer-app\n\nDistributed under GPL-3.0-or-later license.`,
+      message: `Fermata ${packageJson.version}`,
+      detail: t("tray.aboutBody"),
     });
   };
 
@@ -291,8 +299,10 @@ export function buildTray(): void {
     { label: t("tray.quit"), click: quit },
   ]);
 
-  // Call this again for Linux because we modified the context menu
-  tray.setContextMenu(contextMenu);
+  trayMenu = contextMenu;
+  if (process.platform === "linux") {
+    tray.setContextMenu(contextMenu);
+  }
 }
 
 export function initTray(): void {

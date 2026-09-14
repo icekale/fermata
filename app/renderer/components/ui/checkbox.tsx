@@ -12,11 +12,11 @@ function Checkbox({
     <CheckboxPrimitive.Root
       data-slot="checkbox"
       className={cn(
-        "peer size-[17px] shrink-0 cursor-pointer rounded-[5px] border border-rule bg-paper-raised",
-        "transition-[background-color,border-color] duration-150 ease-[var(--ease-paper)]",
-        "data-[state=checked]:border-navy data-[state=checked]:bg-navy data-[state=checked]:text-[color:var(--primary-foreground)]",
-        "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy",
-        "disabled:cursor-not-allowed disabled:opacity-45",
+        "peer size-4 shrink-0 cursor-pointer rounded-[6px] bg-well",
+        "transition-all duration-150 ease-out",
+        "data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground",
+        "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+        "disabled:cursor-not-allowed disabled:opacity-40",
         "aria-invalid:border-destructive",
         className,
       )}
