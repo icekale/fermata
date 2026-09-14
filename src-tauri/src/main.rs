@@ -297,6 +297,13 @@ fn is_zh(s: &Settings) -> bool {
     tag.starts_with("zh")
 }
 
+/* AppKit window and tray operations belong to the main thread. Calling them
+   from a command or heartbeat thread is exactly what "Fermata 意外退出"
+   was. Every mutation goes through here; fire-and-forget by design. */
+fn on_main(app: &tauri::AppHandle, job: impl FnOnce() + Send + 'static) {
+    let _ = app.run_on_main_thread(job);
+}
+
 /* System idle seconds. The CGEventSource call is the same thing
    powerMonitor.getSystemIdleTime wraps, straight over the FFI so no extra
    crate rides along. Windows uses GetLastInputInfo; Linux lands later. */
@@ -379,26 +386,32 @@ fn break_windows(app: &tauri::AppHandle) -> Vec<tauri::WebviewWindow> {
 }
 
 fn close_break_windows(app: &tauri::AppHandle) {
-    let wins = break_windows(app);
-    if wins.is_empty() {
-        return;
-    }
-    let labels: Vec<String> = wins.iter().map(|w| w.label().to_string()).collect();
-    /* Leave fullscreen BEFORE going away: a hidden-but-fullscreen window
-       leaves its macOS fullscreen space painted black. destroy() bypasses
-       the close-request dance entirely — and must run on the MAIN thread:
-       destroying from a side thread took the whole app down. */
-    for win in &wins {
-        let _ = win.set_fullscreen(false);
-        let _ = win.hide();
-    }
     let handle = app.clone();
-    let _ = app.run_on_main_thread(move || {
-        for win in break_windows(&handle) {
-            log_line(&handle, &format!("destroy {}", win.label()));
-            let _ = win.destroy();
+    on_main(app, move || {
+        let wins = break_windows(&handle);
+        if wins.is_empty() {
+            return;
         }
-        log_line(&handle, &format!("teardown done, closed {labels:?}"));
+        let labels: Vec<String> = wins.iter().map(|w| w.label().to_string()).collect();
+        /* Leave fullscreen BEFORE going away: a hidden-but-fullscreen window
+           leaves its macOS fullscreen space painted black. destroy() bypasses
+           the close-request dance entirely. */
+        for win in &wins {
+            let _ = win.set_fullscreen(false);
+            let _ = win.hide();
+        }
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            let h2 = handle.clone();
+            let h3 = handle.clone();
+            let _ = h2.run_on_main_thread(move || {
+                for win in break_windows(&h3) {
+                    log_line(&h3, &format!("destroy {}", win.label()));
+                    let _ = win.destroy();
+                }
+                log_line(&h3, &format!("teardown done, closed {labels:?}"));
+            });
+        });
     });
 }
 
@@ -450,53 +463,62 @@ fn ensure_break_windows(app: &tauri::AppHandle, full: bool) {
 }
 
 fn start_break(app: &tauri::AppHandle) {
-    {
+    let (_length, end_at) = {
         let state = app.state::<AppState>();
         if *state.having_break.lock().unwrap() {
             return; /* The renderer's countdown and the heartbeat can race. */
         }
-    }
-    /* The windows must exist before the event: a fresh one misses whatever
-       was broadcast while it was still loading. Geometry also happens NOW,
-       while the windows are hidden — a resize landing mid-entrance-
-       animation is the one-frame stall. Each window ends up fullscreen on
-       its own display before the page flips. */
-    ensure_break_windows(app, false);
-    let monitors = app.available_monitors().unwrap_or_default();
-    {
+        let length = state.settings.lock().unwrap().break_length_seconds as i64;
+        let end_at = Local::now().timestamp_millis() + length * 1000;
+        *state.break_end_at.lock().unwrap() = Some(end_at);
+        *state.having_break.lock().unwrap() = true;
+        *state.next_break_at.lock().unwrap() = None;
+        *state.notice_shown.lock().unwrap() = false;
+        *state.postpone_count.lock().unwrap() = 0;
+        (length, end_at)
+    };
+    log_line(app, "break start");
+
+    /* Every window operation happens on the main thread (see on_main): the
+       windows are hidden while geometry and fullscreen are applied, the
+       pages flip on BREAK_START, and the reveal lands 150ms later — so the
+       entrance animation plays on a settled fullscreen surface instead of
+       stuttering through a resize. */
+    let handle = app.clone();
+    on_main(app, move || {
+        ensure_break_windows(&handle, false);
+        let monitors = handle.available_monitors().unwrap_or_default();
+        let mut count = 0usize;
         for (i, monitor) in monitors.iter().enumerate() {
             let label = format!("break-{i}");
-            if let Some(win) = app.get_webview_window(&label) {
+            if let Some(win) = handle.get_webview_window(&label) {
                 let pos = monitor.position();
                 let size = monitor.size();
                 let _ = win.hide();
-                let _ = win.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
-                let _ = win.set_size(tauri::PhysicalSize::new(size.width, size.height));
+                let _ = win
+                    .set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
+                let _ = win
+                    .set_size(tauri::PhysicalSize::new(size.width, size.height));
                 let _ = win.set_fullscreen(true);
+                count += 1;
             }
         }
-    }
-    let state = app.state::<AppState>();
-    let length = state.settings.lock().unwrap().break_length_seconds as i64;
-    let end_at = Local::now().timestamp_millis() + length * 1000;
-    *state.break_end_at.lock().unwrap() = Some(end_at);
-    *state.having_break.lock().unwrap() = true;
-    *state.next_break_at.lock().unwrap() = None;
-    *state.notice_shown.lock().unwrap() = false;
-    *state.postpone_count.lock().unwrap() = 0;
-    log_line(app, "break start");
-    let _ = app.emit("BREAK_START", end_at);
-    /* Reveal once the sheet has flipped: the wind-up then plays on a
-       settled fullscreen surface instead of a resizing one. */
-    let reveal = app.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(150));
-        for (i, _) in monitors.iter().enumerate() {
-            if let Some(win) = reveal.get_webview_window(&format!("break-{i}")) {
-                let _ = win.show();
-            }
-        }
-        update_tray_title(&reveal);
+        let _ = handle.emit("BREAK_START", end_at);
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            let h2 = handle.clone();
+            let h3 = handle.clone();
+            let _ = h2.run_on_main_thread(move || {
+                for i in 0..count {
+                    if let Some(win) =
+                        h3.get_webview_window(&format!("break-{i}"))
+                    {
+                        let _ = win.show();
+                    }
+                }
+                update_tray_title(&h3);
+            });
+        });
     });
 }
 
@@ -628,13 +650,16 @@ fn tray_title(state: &State<AppState>) -> Option<String> {
 fn update_tray_title(app: &tauri::AppHandle) {
     #[cfg(target_os = "macos")]
     {
-        let state = app.state::<AppState>();
-        if let Some(tray_state) = app.try_state::<Mutex<Option<TrayIcon>>>() {
-            let title = tray_title(&state);
-            if let Some(tray) = tray_state.lock().unwrap().as_ref() {
-                let _ = tray.set_title(title);
+        let handle = app.clone();
+        on_main(app, move || {
+            let state = handle.state::<AppState>();
+            if let Some(tray_state) = handle.try_state::<Mutex<Option<TrayIcon>>>() {
+                let title = tray_title(&state);
+                if let Some(tray) = tray_state.lock().unwrap().as_ref() {
+                    let _ = tray.set_title(title);
+                }
             }
-        }
+        });
     }
 }
 
@@ -832,27 +857,36 @@ fn open_settings_window(app: tauri::AppHandle) -> tauri::Result<()> {
 
 #[tauri::command]
 fn hide_tray_popover(app: tauri::AppHandle) {
-    if let Some(win) = app.get_webview_window("popover") {
-        let _ = win.hide();
-    }
+    let handle = app.clone();
+    on_main(&app, move || {
+        if let Some(win) = handle.get_webview_window("popover") {
+            let _ = win.hide();
+        }
+    })
 }
 
 #[tauri::command]
 fn resize_tray_popover(app: tauri::AppHandle, height: f64) {
-    if let Some(win) = app.get_webview_window("popover") {
-        let _ = win.set_size(LogicalSize::new(340.0, height));
-    }
+    let handle = app.clone();
+    on_main(&app, move || {
+        if let Some(win) = handle.get_webview_window("popover") {
+            let _ = win.set_size(LogicalSize::new(340.0, height));
+        }
+    })
 }
 
 #[tauri::command]
 fn break_window_resize(_app: tauri::AppHandle, window: tauri::Window) {
-    if let Some(monitor) = window.current_monitor().ok().flatten() {
-        let pos = monitor.position();
-        let size = monitor.size();
-        let _ = window.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
-        let _ = window.set_size(tauri::PhysicalSize::new(size.width, size.height));
-    }
-    let _ = window.set_fullscreen(true);
+    let win = window.clone();
+    let _ = window.run_on_main_thread(move || {
+        if let Some(monitor) = win.current_monitor().ok().flatten() {
+            let pos = monitor.position();
+            let size = monitor.size();
+            let _ = win.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
+            let _ = win.set_size(tauri::PhysicalSize::new(size.width, size.height));
+        }
+        let _ = win.set_fullscreen(true);
+    });
 }
 
 #[tauri::command]
@@ -874,6 +908,11 @@ fn close_current_window(window: tauri::Window) {
 /* ------------------------------------------------------------------ */
 
 fn rebuild_tray_menu(app: &tauri::AppHandle) {
+    let handle = app.clone();
+    on_main(app, move || rebuild_tray_menu_on_main(&handle));
+}
+
+fn rebuild_tray_menu_on_main(app: &tauri::AppHandle) {
     let Some(tray_state) = app.try_state::<Mutex<Option<TrayIcon>>>() else {
         return;
     };
