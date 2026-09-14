@@ -399,7 +399,11 @@ fn close_break_windows(app: &tauri::AppHandle) {
     on_main(app, move || {
         let count = break_windows(&handle).len();
         for win in break_windows(&handle) {
+            /* Hide THIS frame — the desktop returns at once. The space
+               exit would otherwise show the fading-out window as a big
+               dark box for the 400ms before the first delayed hide. */
             let _ = win.set_fullscreen(false);
+            let _ = win.hide();
         }
         log_line(&handle, &format!("exiting fullscreen on {count} window(s)"));
         /* The fullscreen exit animates ~0.5s and its completion re-orders
