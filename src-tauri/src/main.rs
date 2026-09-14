@@ -386,22 +386,19 @@ fn close_break_windows(app: &tauri::AppHandle) {
     let labels: Vec<String> = wins.iter().map(|w| w.label().to_string()).collect();
     /* Leave fullscreen BEFORE going away: a hidden-but-fullscreen window
        leaves its macOS fullscreen space painted black. destroy() bypasses
-       the close-request dance entirely. */
+       the close-request dance entirely — and must run on the MAIN thread:
+       destroying from a side thread took the whole app down. */
     for win in &wins {
         let _ = win.set_fullscreen(false);
         let _ = win.hide();
     }
-    let app = app.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(200));
-        for win in break_windows(&app) {
-            log_line(&app, &format!("destroy {}", win.label()));
+    let handle = app.clone();
+    app.run_on_main_thread(move || {
+        for win in break_windows(&handle) {
+            log_line(&handle, &format!("destroy {}", win.label()));
             let _ = win.destroy();
         }
-        log_line(
-            &app,
-            &format!("teardown done, closed {labels:?}"),
-        );
+        log_line(&handle, &format!("teardown done, closed {labels:?}"));
     });
 }
 
@@ -946,6 +943,7 @@ fn main() {
                 (s.breaks_enabled, s.immediately_start_breaks)
             };
             app.manage(state);
+            log_line(&handle, "app started");
 
             /* Keep the OS login item in step with the stored setting. */
             {
@@ -1084,10 +1082,13 @@ fn main() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|_app, event| {
-            if let tauri::RunEvent::ExitRequested { api, .. } = event {
-                /* Tray-only app: closing every window is not a quit. */
+        .run(|app, event| match event {
+            /* Tray-only app: closing every window is not a quit. */
+            tauri::RunEvent::ExitRequested { api, .. } => {
+                log_line(app, "exit requested");
                 api.prevent_exit();
             }
+            tauri::RunEvent::Exit => log_line(app, "app exit"),
+            _ => {}
         });
 }
