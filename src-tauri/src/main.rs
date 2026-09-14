@@ -454,7 +454,10 @@ fn ensure_break_windows(app: &tauri::AppHandle, full: bool) {
         )
         .inner_size(w, h)
         .position(x, y)
-        .visible(true)
+        /* Always born hidden: the caller reveals (notice) or the reveal
+           thread does (break). A hidden webview also loads its page and
+           runs init ahead of time, so the break page appears instantly. */
+        .visible(false)
         .decorations(false)
         .resizable(false)
         .always_on_top(true)
@@ -617,7 +620,14 @@ fn tick(app: &tauri::AppHandle) {
         *state.started_from_tray.lock().unwrap() = false;
         drop(state);
         if shown {
-            ensure_break_windows(app, false);
+            /* The windows are pre-created and hidden; the slip shows. */
+            let handle2 = app.clone();
+            on_main(app, move || {
+                ensure_break_windows(&handle2, false);
+                for win in break_windows(&handle2) {
+                    let _ = win.show();
+                }
+            });
         }
     }
 }
@@ -1027,6 +1037,10 @@ fn main() {
             }
 
             build_popover(&handle)?;
+            /* Pre-create the break windows hidden: their pages load and run
+               init now, so a break — scheduled or Break-now — shows the
+               sheet instantly instead of a bare brown window. */
+            ensure_break_windows(&handle, false);
             if first_run {
                 open_settings(&handle)?;
             }
