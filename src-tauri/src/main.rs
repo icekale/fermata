@@ -393,7 +393,7 @@ fn close_break_windows(app: &tauri::AppHandle) {
         let _ = win.hide();
     }
     let handle = app.clone();
-    app.run_on_main_thread(move || {
+    let _ = app.run_on_main_thread(move || {
         for win in break_windows(&handle) {
             log_line(&handle, &format!("destroy {}", win.label()));
             let _ = win.destroy();
@@ -457,8 +457,25 @@ fn start_break(app: &tauri::AppHandle) {
         }
     }
     /* The windows must exist before the event: a fresh one misses whatever
-       was broadcast while it was still loading. */
-    ensure_break_windows(app, true);
+       was broadcast while it was still loading. Geometry also happens NOW,
+       while the windows are hidden — a resize landing mid-entrance-
+       animation is the one-frame stall. Each window ends up fullscreen on
+       its own display before the page flips. */
+    ensure_break_windows(app, false);
+    let monitors = app.available_monitors().unwrap_or_default();
+    {
+        for (i, monitor) in monitors.iter().enumerate() {
+            let label = format!("break-{i}");
+            if let Some(win) = app.get_webview_window(&label) {
+                let pos = monitor.position();
+                let size = monitor.size();
+                let _ = win.hide();
+                let _ = win.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
+                let _ = win.set_size(tauri::PhysicalSize::new(size.width, size.height));
+                let _ = win.set_fullscreen(true);
+            }
+        }
+    }
     let state = app.state::<AppState>();
     let length = state.settings.lock().unwrap().break_length_seconds as i64;
     let end_at = Local::now().timestamp_millis() + length * 1000;
@@ -468,10 +485,19 @@ fn start_break(app: &tauri::AppHandle) {
     *state.notice_shown.lock().unwrap() = false;
     *state.postpone_count.lock().unwrap() = 0;
     log_line(app, "break start");
-    /* Every break window flips to the sheet itself: it calls
-       break_window_resize, which fullscreens it on its own display. */
     let _ = app.emit("BREAK_START", end_at);
-    update_tray_title(app);
+    /* Reveal once the sheet has flipped: the wind-up then plays on a
+       settled fullscreen surface instead of a resizing one. */
+    let reveal = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        for (i, _) in monitors.iter().enumerate() {
+            if let Some(win) = reveal.get_webview_window(&format!("break-{i}")) {
+                let _ = win.show();
+            }
+        }
+        update_tray_title(&reveal);
+    });
 }
 
 fn end_break(app: &tauri::AppHandle) {
