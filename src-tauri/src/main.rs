@@ -379,9 +379,23 @@ fn break_windows(app: &tauri::AppHandle) -> Vec<tauri::WebviewWindow> {
 }
 
 fn close_break_windows(app: &tauri::AppHandle) {
-    for win in break_windows(app) {
-        let _ = win.close();
+    let wins = break_windows(app);
+    if wins.is_empty() {
+        return;
     }
+    /* Leave fullscreen BEFORE going away: a hidden-but-fullscreen window
+       leaves its macOS fullscreen space painted black. Hide returns the
+       desktop at once; the destroy follows after the space tears down. */
+    for win in &wins {
+        let _ = win.set_fullscreen(false);
+        let _ = win.hide();
+    }
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        for win in wins {
+            let _ = win.close();
+        }
+    });
 }
 
 /* The notice slip: one small window per display, top-centre. When full is
@@ -1033,10 +1047,16 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| match event {
-            /* Closing a window hides it: the app lives in the tray. */
+            /* Closing a window hides it: the app lives in the tray — except
+               break windows, which the schedule recreates per break and so
+               are allowed to actually die. */
             tauri::WindowEvent::CloseRequested { api, .. } => {
-                let _ = window.hide();
-                api.prevent_close();
+                if window.label().starts_with("break") {
+                    let _ = window.set_fullscreen(false);
+                } else {
+                    let _ = window.hide();
+                    api.prevent_close();
+                }
             }
             /* The popover dismisses like every menu-bar popover: a click
                anywhere else takes focus away, and that is the exit. */
