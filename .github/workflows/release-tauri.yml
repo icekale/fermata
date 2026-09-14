@@ -1,0 +1,92 @@
+name: Release (Tauri)
+
+## The Tauri port's release train: tag tauri-v* (or run by hand) and the three
+## desktop bundles build here. Deliberately separate from the Electron
+## release workflow, which owns the v* tags until the port reaches parity.
+
+on:
+  push:
+    tags: ["tauri-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: macos-arm64
+            bundles: "app,dmg"
+          - os: windows-latest
+            name: windows-x64
+            bundles: "msi,nsis"
+          - os: ubuntu-latest
+            name: linux-x64
+            bundles: "deb,appimage"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.13.0"
+          cache: "npm"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri"
+
+      - run: npm ci
+
+      ## The same gates the Electron release runs.
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Build
+        run: npx tauri build --bundles ${{ matrix.bundles }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tauri-${{ matrix.name }}
+          path: |
+            src-tauri/target/release/bundle/**/*.dmg
+            src-tauri/target/release/bundle/**/*.app
+            src-tauri/target/release/bundle/**/*.msi
+            src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/bundle/**/*.deb
+            src-tauri/target/release/bundle/**/*.AppImage
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          ## Draft, like the Electron train: looked at before downloaded.
+          draft: true
+          generate_release_notes: true
+          body: |
+            **Tauri 预览版 / Tauri preview build** — the system-WebView rewrite. ~5–10 MB installers, about 2% of the Electron build.
+
+            已包含 / Included: settings, tray + popover, notice slip, full-screen breaks (multi-display), Smart Breaks idle detection (macOS / Windows), postpone limits, sound, auto-launch.
+
+            已知缺口 / Known gaps: Linux idle detection is not implemented yet (Smart Breaks off there); OS notifications are not ported; multi-display break behaviour may still differ from the Electron build. The Electron release remains the primary download.
+          files: artifacts/**/*

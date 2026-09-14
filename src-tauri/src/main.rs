@@ -295,20 +295,66 @@ fn is_zh(s: &Settings) -> bool {
 
 /* System idle seconds. The CGEventSource call is the same thing
    powerMonitor.getSystemIdleTime wraps, straight over the FFI so no extra
-   crate rides along. macOS only for now; Windows/Linux land with phase 3. */
+   crate rides along. Windows uses GetLastInputInfo; Linux lands later. */
 #[cfg(target_os = "macos")]
 fn system_idle_secs() -> u64 {
     #[link(name = "CoreGraphics", kind = "framework")]
     extern "C" {
-        fn CGEventSourceSecondsSinceLastEventType(state: i32, mask: u64) -> f64;
+        /* CGEventType is a 32-bit enum; kCGAnyInputEventType = ~0u32. */
+        fn CGEventSourceSecondsSinceLastEventType(state: i32, event_type: u32) -> f64;
     }
-    /* kCGEventSourceStateHIDSystemState = 1, kCGAnyInputEventType = ~0 */
-    unsafe { CGEventSourceSecondsSinceLastEventType(1, u64::MAX).max(0.0) as u64 }
+    /* kCGEventSourceStateHIDSystemState = 1, kCGAnyInputEventType = ~0u32 */
+    unsafe { CGEventSourceSecondsSinceLastEventType(1, u32::MAX).max(0.0) as u64 }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
 fn system_idle_secs() -> u64 {
+    #[repr(C)]
+    struct LastInputInfo {
+        cb_size: u32,
+        dw_time: u32,
+    }
+    #[link(name = "user32")]
+    extern "system" {
+        fn GetLastInputInfo(info: *mut LastInputInfo) -> i32;
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetTickCount() -> u32;
+    }
+    unsafe {
+        let mut info = LastInputInfo { cb_size: 8, dw_time: 0 };
+        if GetLastInputInfo(&mut info) == 0 {
+            return 0;
+        }
+        (GetTickCount().wrapping_sub(info.dw_time) / 1000) as u64
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn system_idle_secs() -> u64 {
+    /* Linux: phase 4 (X11 screensaver extension). Smart Breaks stays off
+       there until then — the timer itself is unaffected. */
     0
+}
+
+/* One line per event into the config dir, so an incident report has
+   something to stand on. */
+fn log_line(app: &tauri::AppHandle, msg: &str) {
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(config_file(app, "fermata.log"))
+        .ok();
+    if let Some(file) = file.as_mut() {
+        use std::io::Write;
+        let _ = writeln!(
+            file,
+            "[{}] {}",
+            Local::now().format("%m-%d %H:%M:%S"),
+            msg
+        );
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -362,7 +408,7 @@ fn show_notice(app: &tauri::AppHandle) {
         .always_on_top(true)
         .skip_taskbar(true);
         if let Err(err) = win.build() {
-            eprintln!("notice window {label}: {err}");
+            log_line(app, &format!("notice window {label}: {err}"));
         }
     }
 }
@@ -379,6 +425,7 @@ fn start_break(app: &tauri::AppHandle) {
     *state.next_break_at.lock().unwrap() = None;
     *state.notice_shown.lock().unwrap() = false;
     *state.postpone_count.lock().unwrap() = 0;
+    log_line(app, "break start");
     /* Every break window flips to the sheet itself: it calls
        break_window_resize, which fullscreens it on its own display. */
     let _ = app.emit("BREAK_START", end_at);
@@ -387,12 +434,16 @@ fn start_break(app: &tauri::AppHandle) {
 
 fn end_break(app: &tauri::AppHandle) {
     let state = app.state::<AppState>();
+    if !*state.having_break.lock().unwrap() {
+        return; /* A stray Esc outside a break must not reschedule. */
+    }
     *state.having_break.lock().unwrap() = false;
     *state.break_end_at.lock().unwrap() = None;
     *state.last_break_at.lock().unwrap() = Some(Local::now().timestamp_millis());
     *state.postpone_count.lock().unwrap() = 0;
     let freq = state.settings.lock().unwrap().break_frequency_seconds as i64;
     *state.next_break_at.lock().unwrap() = Some(Local::now().timestamp_millis() + freq * 1000);
+    log_line(app, "break end");
     let _ = app.emit("BREAK_END", ());
     close_break_windows(app);
     update_tray_title(app);
@@ -936,11 +987,18 @@ fn main() {
                 start_break(&handle);
             }
 
-            /* The heartbeat. */
+            /* The heartbeat. A panic here must not silently kill the
+               schedule — catch, log, and keep ticking. */
             let heartbeat = handle.clone();
             std::thread::spawn(move || loop {
                 std::thread::sleep(std::time::Duration::from_millis(1000));
-                tick(&heartbeat);
+                let app = heartbeat.clone();
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+                    move || tick(&app),
+                ));
+                if result.is_err() {
+                    log_line(&heartbeat, "heartbeat tick panicked");
+                }
             });
 
             Ok(())

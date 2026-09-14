@@ -72,4 +72,15 @@
       nativeClose();
     }
   };
+
+  /* Break windows are focusable here (unlike Electron's), so the keyboard
+     is a real exit: Esc ends the break. Without this, a failed render
+     would leave the machine in a fullscreen takeover with no escape. */
+  if (window.location.search.indexOf("page=break") !== -1) {
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        invoke("break_end").catch(() => {});
+      }
+    });
+  }
 })();
