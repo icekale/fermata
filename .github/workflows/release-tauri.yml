@@ -20,13 +20,10 @@ jobs:
         include:
           - os: macos-latest
             name: macos-arm64
-            bundles: "app,dmg"
           - os: windows-latest
             name: windows-x64
-            bundles: "msi,nsis"
           - os: ubuntu-latest
             name: linux-x64
-            bundles: "deb,appimage"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -56,7 +53,7 @@ jobs:
       - run: npm test
 
       - name: Build
-        run: npx tauri build --bundles ${{ matrix.bundles }}
+        run: npx tauri build
 
       - uses: actions/upload-artifact@v4
         with:
