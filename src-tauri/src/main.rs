@@ -12,6 +12,7 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, LogicalSize, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_autostart::ManagerExt;
+use tauri_plugin_notification::NotificationExt;
 
 /* ------------------------------------------------------------------ */
 /* Settings — serde mirror of app/types/settings.ts, defaults included */
@@ -297,6 +298,38 @@ fn is_zh(s: &Settings) -> bool {
     tag.starts_with("zh")
 }
 
+/* OS notifications — the NOTIFICATION break mode and the Smart Breaks
+   "away" ping. Strings mirror app/i18n. */
+struct NotifStrings {
+    break_title: &'static str,
+    idle_title: &'static str,
+    idle_body: &'static str,
+}
+
+fn notif_strings(s: &Settings) -> NotifStrings {
+    if is_zh(s) {
+        NotifStrings {
+            break_title: "该休息了！",
+            idle_title: "检测到你已经在休息",
+            idle_body: "已离开",
+        }
+    } else {
+        NotifStrings {
+            break_title: "Time for a break!",
+            idle_title: "Break automatically detected",
+            idle_body: "Away for",
+        }
+    }
+}
+
+fn send_notification(app: &tauri::AppHandle, _s: &Settings, title: &str, body: &str) {
+    let _ = app.notification().builder().title(title).body(body).show();
+}
+
+fn fmt_hms(secs: u64) -> String {
+    format!("{}:{:02}:{:02}", secs / 3600, (secs % 3600) / 60, secs % 60)
+}
+
 /* AppKit window and tray operations belong to the main thread. Calling them
    from a command or heartbeat thread is exactly what "Fermata 意外退出"
    was. Every mutation goes through here; fire-and-forget by design. */
@@ -558,9 +591,13 @@ fn end_break(app: &tauri::AppHandle) {
    the break's end, and let Smart Breaks credit over-threshold idling. */
 fn tick(app: &tauri::AppHandle) {
     let due;
+    let s = {
+        let state = app.state::<AppState>();
+        let guard = state.settings.lock().unwrap();
+        guard.clone()
+    };
     {
         let state = app.state::<AppState>();
-        let s = state.settings.lock().unwrap().clone();
         let now = Local::now().timestamp_millis();
         let having_break = *state.having_break.lock().unwrap();
 
@@ -596,6 +633,15 @@ fn tick(app: &tauri::AppHandle) {
                 drop(next);
                 *state.notice_shown.lock().unwrap() = false;
                 drop(counted);
+                if s.idle_reset_notification {
+                    let n = notif_strings(&s);
+                    send_notification(
+                        app,
+                        &s,
+                        n.idle_title,
+                        &format!("{} {}", n.idle_body, fmt_hms(threshold)),
+                    );
+                }
                 close_break_windows(app);
                 return;
             }
@@ -604,10 +650,13 @@ fn tick(app: &tauri::AppHandle) {
             }
         }
 
+        let notification_mode = s.notification_type == "NOTIFICATION";
         let mut next = state.next_break_at.lock().unwrap();
         match *next {
             Some(fire_at) => {
-                *state.notice_shown.lock().unwrap() = now >= fire_at - NOTICE_LEAD_MS;
+                /* Simple-notification mode never opens windows. */
+                *state.notice_shown.lock().unwrap() =
+                    !notification_mode && now >= fire_at - NOTICE_LEAD_MS;
                 due = now >= fire_at;
             }
             None => {
@@ -617,7 +666,16 @@ fn tick(app: &tauri::AppHandle) {
         }
     }
     if due {
-        start_break(app);
+        if s.notification_type == "NOTIFICATION" {
+            let n = notif_strings(&s);
+            send_notification(app, &s, n.break_title, "");
+            let state = app.state::<AppState>();
+            *state.next_break_at.lock().unwrap() =
+                Some(Local::now().timestamp_millis() + s.break_frequency_seconds as i64 * 1000);
+            log_line(app, "notified (notification mode)");
+        } else {
+            start_break(app);
+        }
     } else {
         let state = app.state::<AppState>();
         let shown = *state.notice_shown.lock().unwrap();
@@ -991,6 +1049,7 @@ fn on_tray_menu(app: &tauri::AppHandle, id: &str) {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
