@@ -1139,17 +1139,23 @@ fn main() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| on_tray_menu(app, event.id().as_ref()))
                 .on_tray_icon_event(|tray, event| {
+                    /* macOS delivers the click on mouse-down or mouse-up
+                       depending on version: accept either, and never fight a
+                       panel that is already showing (the down+up pair would
+                       otherwise show-then-hide in one gesture). */
+                    let handle0 = tray.app_handle();
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
                         rect,
                         ..
-                    } = event
+                    } = &event
                     {
-                        /* Anchor the popover under the tray icon, not in the
-                           middle of the screen where Tauri puts new windows. */
-                        let handle = tray.app_handle();
-                        if let Some(popover) = handle.get_webview_window("popover") {
+                        log_line(handle0, "tray left click");
+                        if let Some(popover) = handle0.get_webview_window("popover") {
+                            if popover.is_visible().unwrap_or(false) {
+                                log_line(handle0, "popover already visible");
+                                return;
+                            }
                             let scale = popover.scale_factor().unwrap_or(2.0);
                             /* rect.position / rect.size arrive as Position/Size
                                enums; the tray rect is physical pixels. */
@@ -1178,7 +1184,7 @@ fn main() {
                                 y as i32,
                             ));
                         }
-                        show_popover(handle);
+                        show_popover(handle0);
                     }
                 })
                 .build(&handle)?;
