@@ -26,28 +26,31 @@
 
 :root {
   /* --- raw palette: one name per job ------------------------------------ */
+  /* 苔原 (Moss Tundra) variant: Mole Earth's warm ground, the accent moved
+     from gold to moss. Variable names keep the gold-era names (--gold,
+     --gold-ink) so the diff against main stays a pure palette swap. */
   --earth: #231816; /* the panel — the installed Mole's own ground */
   --earth-raise: #332521; /* opaque sheet over the panel: menus, dialogs */
-  --wash: rgba(255, 244, 220, 0.055); /* a tile on the panel */
-  --wash-hover: rgba(255, 244, 220, 0.09);
+  --wash: rgba(233, 242, 218, 0.06); /* a tile on the panel — faintly green */
+  --wash-hover: rgba(233, 242, 218, 0.1);
   --well: rgba(0, 0, 0, 0.22); /* pressed into the panel: fields, tracks */
 
   --ink-hi: #f4f2ec; /* values, titles */
   --ink-mid: #e8dcc8; /* prose, secondary labels */
   --ink-lo: #ad9d80; /* captions, micro-labels — 4.9:1 on a tile */
 
-  --gold: #e8ca8d; /* the one accent: action, selection, focus */
-  --gold-ink: #2a241c; /* text on gold */
+  --gold: #a9bd8a; /* the one accent — moss, not gold (historic name) */
+  --gold-ink: #202815; /* text on the accent */
 
-  --ok: #8fbf72; /* running, progress */
+  --ok: #7fc069; /* running, progress — a step brighter than the accent */
   --warn: #e0a35c; /* paused, nearly due */
   --rose: #d4785a; /* destructive, and "now" on the ledger */
 
   --shadow-lift: 0 12px 32px rgba(0, 0, 0, 0.35);
   --shadow-veil: 0 24px 60px rgba(0, 0, 0, 0.5);
 
-  --hairline: rgba(244, 242, 236, 0.1);
-  --hairline-soft: rgba(244, 242, 236, 0.06);
+  --hairline: rgba(240, 244, 230, 0.11);
+  --hairline-soft: rgba(240, 244, 230, 0.06);
 
   --radius: 12px;
 
@@ -170,12 +173,12 @@
     border-radius: 6px;
   }
   ::selection {
-    background: rgba(232, 202, 141, 0.28);
+    background: rgba(169, 189, 138, 0.28);
     color: var(--ink-hi);
   }
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgba(232, 202, 141, 0.22) transparent;
+    scrollbar-color: rgba(169, 189, 138, 0.22) transparent;
   }
   ::-webkit-scrollbar {
     width: 8px;
@@ -185,7 +188,7 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(232, 202, 141, 0.22);
+    background: rgba(169, 189, 138, 0.22);
     border-radius: 999px;
     border: 2px solid transparent;
     background-clip: padding-box;
