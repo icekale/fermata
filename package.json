@@ -1,6 +1,6 @@
 {
   "name": "breaktimer",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "productName": "Fermata",
   "description": "A break timer that holds the note, then lets you continue",
   "scripts": {

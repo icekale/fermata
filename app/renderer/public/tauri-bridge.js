@@ -43,15 +43,18 @@
     invokeGetTimeSinceLastBreak: () => invoke("get_time_since_last_break"),
     invokeWasStartedFromTray: () => invoke("was_started_from_tray"),
     invokeStartBreakNow: () => invoke("start_break_now"),
-    invokeSetBreaksEnabled: (enabled) => invoke("set_breaks_enabled", { enabled }),
+    invokeSetBreaksEnabled: (enabled) =>
+      invoke("set_breaks_enabled", { enabled }),
     invokeOpenSettingsWindow: () => invoke("open_settings_window"),
     invokeHideTrayPopover: () => invoke("hide_tray_popover"),
-    invokeResizeTrayPopover: (height) => invoke("resize_tray_popover", { height }),
+    invokeResizeTrayPopover: (height) =>
+      invoke("resize_tray_popover", { height }),
     invokeBreakStart: () => invoke("break_start"),
     invokeBreakEnd: () => invoke("break_end"),
     invokeBreakPostpone: (action) => invoke("break_postpone", { action }),
     invokeBreakWindowResize: () => invoke("break_window_resize"),
-    invokeCompleteBreakTracking: (ms) => invoke("complete_break_tracking", { ms }),
+    invokeCompleteBreakTracking: (ms) =>
+      invoke("complete_break_tracking", { ms }),
     invokeStartSound: (type, volume = 1) => playSound(type, true, volume),
     invokeEndSound: (type, volume = 1) => playSound(type, false, volume),
 
@@ -86,11 +89,15 @@
     /* Diagnostics for the takeover lifecycle: page load, BREAK_START and
        BREAK_END receipt each land in fermata.log. */
     const report = (msg) =>
-      invoke("log_from_renderer", { msg: `page=break ${msg}` }).catch(
-        () => {},
-      );
+      invoke("log_from_renderer", { msg: `page=break ${msg}` }).catch(() => {});
     report(`loaded readyState=${document.readyState}`);
-    setTimeout(() => report(`settled clock=${Boolean(document.querySelector(".break-clock"))}`), 1200);
+    setTimeout(
+      () =>
+        report(
+          `settled clock=${Boolean(document.querySelector(".break-clock"))}`,
+        ),
+      1200,
+    );
     const origStart = window.ipcRenderer.onBreakStart;
     const origEnd = window.ipcRenderer.onBreakEnd;
     window.ipcRenderer.onBreakStart = (cb) =>
