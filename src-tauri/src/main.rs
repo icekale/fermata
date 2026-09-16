@@ -401,19 +401,12 @@ fn break_windows(app: &tauri::AppHandle) -> Vec<tauri::WebviewWindow> {
 fn close_break_windows(app: &tauri::AppHandle) {
     let handle = app.clone();
     on_main(app, move || {
-        let count = break_windows(&handle).len();
+        let hidden = break_windows(&handle).len();
         for win in break_windows(&handle) {
-            /* Hide FIRST — this frame the desktop is back. Exiting the
-               fullscreen space afterwards animates a window flying toward
-               the left of the screen, so it must happen on a hidden
-               window where nobody can see it. */
             let _ = win.hide();
-            let _ = win.set_fullscreen(false);
         }
-        log_line(&handle, &format!("exiting fullscreen on {count} window(s)"));
-        /* The fullscreen exit animates ~0.5s and its completion re-orders
-           the window forward — swallowing a single early hide(). Hide on
-           both sides of that animation: once at 400ms, once at 1800ms. */
+        log_line(&handle, &format!("break windows hidden: {hidden}"));
+        /* A hidden re-assert pass in case anything re-orders the windows. */
         for delay_ms in [400u64, 1_800] {
             let h2 = handle.clone();
             let h3 = handle.clone();
