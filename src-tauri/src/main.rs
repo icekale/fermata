@@ -8,8 +8,7 @@
 use chrono::{Datelike, Local, Timelike};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
-use tauri::menu::{Menu, MenuItem};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
+use tauri::tray::{TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, LogicalSize, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_notification::NotificationExt;
@@ -260,34 +259,6 @@ fn save_settings(app: &tauri::AppHandle, s: &Settings) {
         std::fs::write(config_file(app, "settings.json"), json).ok();
     }
 }
-
-/* ------------------------------------------------------------------ */
-/* i18n for the tray menu — the two string sets, minimal               */
-/* ------------------------------------------------------------------ */
-
-struct MenuStrings {
-    start: &'static str,
-    pause: &'static str,
-    resume: &'static str,
-    settings: &'static str,
-    quit: &'static str,
-}
-
-const EN: MenuStrings = MenuStrings {
-    start: "Start break now",
-    pause: "Pause",
-    resume: "Resume",
-    settings: "Settings...",
-    quit: "Quit",
-};
-
-const ZH: MenuStrings = MenuStrings {
-    start: "立即开始休息",
-    pause: "暂停",
-    resume: "继续",
-    settings: "设置……",
-    quit: "退出",
-};
 
 fn is_zh(s: &Settings) -> bool {
     let tag = if s.language == "system" {
@@ -817,7 +788,6 @@ fn set_settings(app: tauri::AppHandle, state: State<'_, AppState>, settings: Set
     if !settings.breaks_enabled {
         *state.next_break_at.lock().unwrap() = None;
     }
-    rebuild_tray_menu(&app);
     update_tray_title(&app);
 }
 
@@ -926,7 +896,6 @@ fn set_breaks_enabled(app: tauri::AppHandle, state: State<'_, AppState>, enabled
         *state.next_break_at.lock().unwrap() = None;
     }
     save_settings(&app, &state.settings.lock().unwrap());
-    rebuild_tray_menu(&app);
     update_tray_title(&app);
 }
 
@@ -979,69 +948,15 @@ fn close_current_window(window: tauri::Window) {
     let _ = window.hide();
 }
 
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) {
+    log_line(&app, "quit from tray popover");
+    app.exit(0);
+}
+
 /* ------------------------------------------------------------------ */
 /* Tray                                                                */
 /* ------------------------------------------------------------------ */
-
-fn rebuild_tray_menu(app: &tauri::AppHandle) {
-    let handle = app.clone();
-    on_main(app, move || rebuild_tray_menu_on_main(&handle));
-}
-
-fn rebuild_tray_menu_on_main(app: &tauri::AppHandle) {
-    let Some(tray_state) = app.try_state::<Mutex<Option<TrayIcon>>>() else {
-        return;
-    };
-    let guard = tray_state.lock().unwrap();
-    let Some(tray) = guard.as_ref() else { return };
-    let state = app.state::<AppState>();
-    let s = state.settings.lock().unwrap().clone();
-    let m = if is_zh(&s) { ZH } else { EN };
-    let enabled = s.breaks_enabled;
-    drop(state);
-
-    let Ok(start) = MenuItem::with_id(app, "start", m.start, enabled, None::<&str>) else {
-        return;
-    };
-    let Ok(toggle) = MenuItem::with_id(
-        app,
-        "toggle",
-        if enabled { m.pause } else { m.resume },
-        true,
-        None::<&str>,
-    ) else {
-        return;
-    };
-    let Ok(settings) = MenuItem::with_id(app, "settings", m.settings, true, None::<&str>) else {
-        return;
-    };
-    let Ok(quit) = MenuItem::with_id(app, "quit", m.quit, true, None::<&str>) else {
-        return;
-    };
-    let Ok(menu) = Menu::new(app) else { return };
-    let _ = menu.append(&start);
-    let _ = menu.append(&toggle);
-    let _ = menu.append(&settings);
-    let _ = menu.append(&quit);
-    let _ = tray.set_menu(Some(menu));
-}
-
-fn on_tray_menu(app: &tauri::AppHandle, id: &str) {
-    match id {
-        "start" => start_break(app),
-        "toggle" => {
-            let state = app.state::<AppState>();
-            let enabled = state.settings.lock().unwrap().breaks_enabled;
-            drop(state);
-            set_breaks_enabled(app.clone(), app.state(), !enabled);
-        }
-        "settings" => {
-            let _ = open_settings(app);
-        }
-        "quit" => app.exit(0),
-        _ => {}
-    }
-}
 
 /* ------------------------------------------------------------------ */
 /* App                                                                 */
@@ -1075,6 +990,7 @@ fn main() {
             break_window_resize,
             complete_break_tracking,
             close_current_window,
+            quit_app,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -1108,23 +1024,10 @@ fn main() {
                 open_settings(&handle)?;
             }
 
-            /* Tray: icon, localized menu, left-click popover. */
-            let s = {
-                let state = handle.state::<AppState>();
-                let guard = state.settings.lock().unwrap();
-                guard.clone()
-            };
-            let m = if is_zh(&s) { ZH } else { EN };
-            let start = MenuItem::with_id(&handle, "start", m.start, breaks_enabled, None::<&str>)?;
-            let toggle = MenuItem::with_id(&handle, "toggle", m.pause, true, None::<&str>)?;
-            let settings = MenuItem::with_id(&handle, "settings", m.settings, true, None::<&str>)?;
-            let quit = MenuItem::with_id(&handle, "quit", m.quit, true, None::<&str>)?;
-            let menu = Menu::new(&handle)?;
-            menu.append(&start)?;
-            menu.append(&toggle)?;
-            menu.append(&settings)?;
-            menu.append(&quit)?;
-
+            /* Tray: icon only. No menu is attached to the icon — a menu
+               attached to a tray icon makes macOS swallow left-click events
+               entirely, so left click opens the popover and right click is
+               reserved (the popover carries every action it had). */
             let tray = TrayIconBuilder::with_id("main")
                 .icon(
                     tauri::image::Image::from_bytes(include_bytes!(
@@ -1135,23 +1038,12 @@ fn main() {
                 /* A menu-bar icon is a silhouette, not a logo: macOS tints
                    template images to match the menubar and its own state. */
                 .icon_as_template(true)
-                .menu(&menu)
-                .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| on_tray_menu(app, event.id().as_ref()))
                 .on_tray_icon_event(|tray, event| {
-                    /* macOS delivers the click on mouse-down or mouse-up
-                       depending on version: accept either, and never fight a
-                       panel that is already showing (the down+up pair would
-                       otherwise show-then-hide in one gesture). */
                     let handle0 = tray.app_handle();
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        rect,
-                        ..
-                    } = &event
-                    {
-                        log_line(handle0, "tray left click");
-                        if let Some(popover) = handle0.get_webview_window("popover") {
+                    if let TrayIconEvent::Click { rect, .. } = &event {
+                        log_line(handle0, "tray click");
+                        if let Some(popover) = handle0.get_webview_window("popover")
+                        {
                             if popover.is_visible().unwrap_or(false) {
                                 log_line(handle0, "popover already visible");
                                 return;
@@ -1190,7 +1082,6 @@ fn main() {
                 .build(&handle)?;
             tray.set_visible(true)?;
             handle.manage(Mutex::new(Some(tray)));
-
             if immediately && breaks_enabled {
                 start_break(&handle);
             }
