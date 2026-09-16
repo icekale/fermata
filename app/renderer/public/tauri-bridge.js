@@ -82,5 +82,25 @@
         invoke("break_end").catch(() => {});
       }
     });
+    /* Diagnostics for the takeover lifecycle: page load, BREAK_START and
+       BREAK_END receipt each land in fermata.log. */
+    const report = (msg) =>
+      invoke("log_from_renderer", { msg: `page=break ${msg}` }).catch(
+        () => {},
+      );
+    report(`loaded readyState=${document.readyState}`);
+    setTimeout(() => report(`settled clock=${Boolean(document.querySelector(".break-clock"))}`), 1200);
+    const origStart = window.ipcRenderer.onBreakStart;
+    const origEnd = window.ipcRenderer.onBreakEnd;
+    window.ipcRenderer.onBreakStart = (cb) =>
+      origStart((p) => {
+        report("BREAK_START received");
+        cb(p);
+      });
+    window.ipcRenderer.onBreakEnd = (cb) =>
+      origEnd(() => {
+        report("BREAK_END received");
+        cb();
+      });
   }
 })();

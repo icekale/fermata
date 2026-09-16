@@ -84,9 +84,13 @@ export default function Break() {
 
   useEffect(() => {
     if (closing) {
-      setTimeout(() => {
+      /* Let the sheet dissolve into the desktop: the body's own dark
+         ground would otherwise cut the fade short with a flat rectangle. */
+      document.body.style.background = "transparent";
+      const t = setTimeout(() => {
         window.close();
       }, 500);
+      return () => clearTimeout(t);
     }
   }, [closing]);
 

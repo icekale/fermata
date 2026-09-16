@@ -460,6 +460,7 @@ fn ensure_break_windows(app: &tauri::AppHandle, full: bool) {
            thread does (break). A hidden webview also loads its page and
            runs init ahead of time, so the break page appears instantly. */
         .visible(false)
+        .transparent(true)
         .decorations(false)
         .resizable(false)
         .always_on_top(true)
@@ -517,7 +518,7 @@ fn start_break(app: &tauri::AppHandle) {
         }
         let _ = handle.emit("BREAK_START", end_at);
         std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(150));
+            std::thread::sleep(std::time::Duration::from_millis(450));
             let h2 = handle.clone();
             let h3 = handle.clone();
             let _ = h2.run_on_main_thread(move || {
@@ -548,7 +549,17 @@ fn end_break(app: &tauri::AppHandle) {
     *state.next_break_at.lock().unwrap() = Some(Local::now().timestamp_millis() + freq * 1000);
     log_line(app, "break end");
     let _ = app.emit("BREAK_END", ());
-    close_break_windows(app);
+    /* Let the sheet's own fade-out play to the desktop before the windows
+       go away - hiding this frame would cut the fade mid-breath. */
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(1200));
+        let h2 = handle.clone();
+        let h3 = handle.clone();
+        let _ = h2.run_on_main_thread(move || {
+            close_break_windows(&h3);
+        });
+    });
     update_tray_title(app);
 }
 
@@ -879,7 +890,15 @@ fn break_postpone(app: tauri::AppHandle, state: State<'_, AppState>, _action: St
     *state.next_break_at.lock().unwrap() =
         Some(Local::now().timestamp_millis() + postpone * 1000);
     let _ = app.emit("BREAK_END", ());
-    close_break_windows(&app);
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(1200));
+        let h2 = handle.clone();
+        let h3 = handle.clone();
+        let _ = h2.run_on_main_thread(move || {
+            close_break_windows(&h3);
+        });
+    });
     update_tray_title(&app);
 }
 
@@ -936,6 +955,11 @@ fn break_window_resize(_app: tauri::AppHandle, window: tauri::Window) {
 fn complete_break_tracking(_ms: f64) {}
 
 #[tauri::command]
+fn log_from_renderer(app: tauri::AppHandle, msg: String) {
+    log_line(&app, &format!("renderer: {msg}"));
+}
+
+#[tauri::command]
 fn close_current_window(window: tauri::Window) {
     /* Every surface hides — the app lives in the tray, and break windows
        live for the whole process. */
@@ -985,6 +1009,7 @@ fn main() {
             complete_break_tracking,
             close_current_window,
             quit_app,
+            log_from_renderer,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
