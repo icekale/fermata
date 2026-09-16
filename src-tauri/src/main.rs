@@ -460,7 +460,6 @@ fn ensure_break_windows(app: &tauri::AppHandle, full: bool) {
            thread does (break). A hidden webview also loads its page and
            runs init ahead of time, so the break page appears instantly. */
         .visible(false)
-        .transparent(true)
         .decorations(false)
         .resizable(false)
         .always_on_top(true)
