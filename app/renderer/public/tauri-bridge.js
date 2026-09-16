@@ -1,3 +1,4 @@
+/* global navigator Audio */
 /* Electron's preload defines window.ipcRenderer; under Tauri this adapter
    provides the same surface from Tauri commands, so the React renderer runs
    unchanged in both. Loaded first in index.html; a no-op when the Electron

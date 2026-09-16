@@ -533,7 +533,17 @@ fn end_break(app: &tauri::AppHandle) {
     *state.next_break_at.lock().unwrap() = Some(Local::now().timestamp_millis() + freq * 1000);
     log_line(app, "break end");
     let _ = app.emit("BREAK_END", ());
-    close_break_windows(app);
+    /* The renderer plays an ~800ms completion beat; hide after it lands.
+       Safety net in case the renderer never gets there. */
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+        let h2 = handle.clone();
+        let h3 = handle.clone();
+        let _ = h2.run_on_main_thread(move || {
+            close_break_windows(&h3);
+        });
+    });
     update_tray_title(app);
 }
 
@@ -864,7 +874,15 @@ fn break_postpone(app: tauri::AppHandle, state: State<'_, AppState>, _action: St
     *state.next_break_at.lock().unwrap() =
         Some(Local::now().timestamp_millis() + postpone * 1000);
     let _ = app.emit("BREAK_END", ());
-    close_break_windows(&app);
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+        let h2 = handle.clone();
+        let h3 = handle.clone();
+        let _ = h2.run_on_main_thread(move || {
+            close_break_windows(&h3);
+        });
+    });
     update_tray_title(&app);
 }
 

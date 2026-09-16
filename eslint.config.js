@@ -5,6 +5,9 @@ const react = require("eslint-plugin-react");
 const reactHooks = require("eslint-plugin-react-hooks");
 
 module.exports = [
+  {
+    ignores: ["src-tauri/target/**", "src-tauri/gen/**", "dist/**"],
+  },
   js.configs.recommended,
   {
     files: ["**/*.{ts,tsx}"],

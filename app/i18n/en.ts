@@ -175,6 +175,7 @@ export const en = {
   "break.ends": "Ends {time}",
   "break.cancel": "Cancel Break",
   "break.end": "End Break",
+  "break.done": "✓ Break complete",
   "break.progress": "Break progress",
 
   /* --- time since ------------------------------------------------------- */

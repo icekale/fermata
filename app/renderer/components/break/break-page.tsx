@@ -134,6 +134,29 @@ export function BreakPage({
   ).padStart(2, "0")}`;
   const veilOn = settings.showBackdrop;
 
+  if (closing) {
+    /* The one authored exit beat: the sheet dissolves, a single quiet
+       confirmation holds the screen for a beat, then the window goes. */
+    return (
+      <MotionConfig reducedMotion="user">
+        <div
+          className="flex h-full w-full select-none items-center justify-center"
+          style={{ backgroundColor: settings.backgroundColor }}
+        >
+          <motion.span
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.9 }}
+            transition={{ duration: 0.25 }}
+            className="text-[15px] font-medium tracking-wide"
+            style={{ color: ink }}
+          >
+            {t("break.done")}
+          </motion.span>
+        </div>
+      </MotionConfig>
+    );
+  }
+
   return (
     <MotionConfig reducedMotion="user">
       <div className="relative h-full w-full overflow-hidden bg-transparent select-none">

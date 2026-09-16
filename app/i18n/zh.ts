@@ -171,6 +171,7 @@ export const zh: Record<MessageKey, string> = {
   "break.ends": "{time} 结束",
   "break.cancel": "取消休息",
   "break.end": "结束休息",
+  "break.done": "✓ 休息完成",
   "break.progress": "休息进度",
 
   /* --- 距上次休息 ------------------------------------------------------- */
