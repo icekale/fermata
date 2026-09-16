@@ -140,7 +140,11 @@ export function BreakPage({
         {veilOn && (
           <motion.div
             aria-hidden="true"
-            className="absolute inset-0 backdrop-blur-md"
+            /* No backdrop-blur here: a live blur over a 3440-wide surface
+               every frame is a GPU tax the compositor pays for the whole
+               break. The veil reads as a darkening layer, which is the
+               design. */
+            className="absolute inset-0"
             style={{ backgroundColor: settings.veilColor }}
             initial={{ opacity: 0 }}
             animate={{ opacity: closing ? 0 : settings.backdropOpacity }}
