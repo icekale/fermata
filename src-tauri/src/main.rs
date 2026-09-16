@@ -406,21 +406,6 @@ fn close_break_windows(app: &tauri::AppHandle) {
             let _ = win.hide();
         }
         log_line(&handle, &format!("break windows hidden: {hidden}"));
-        /* A hidden re-assert pass in case anything re-orders the windows. */
-        for delay_ms in [400u64, 1_800] {
-            let h2 = handle.clone();
-            let h3 = handle.clone();
-            std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_millis(delay_ms));
-                let _ = h2.run_on_main_thread(move || {
-                    for win in break_windows(&h3) {
-                        let _ = win.set_decorations(false);
-                        let _ = win.hide();
-                    }
-                    log_line(&h3, &format!("break windows hidden (+{delay_ms}ms)"));
-                });
-            });
-        }
     });
 }
 
@@ -548,17 +533,7 @@ fn end_break(app: &tauri::AppHandle) {
     *state.next_break_at.lock().unwrap() = Some(Local::now().timestamp_millis() + freq * 1000);
     log_line(app, "break end");
     let _ = app.emit("BREAK_END", ());
-    /* Let the sheet's own fade-out play to the desktop before the windows
-       go away - hiding this frame would cut the fade mid-breath. */
-    let handle = app.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(1200));
-        let h2 = handle.clone();
-        let h3 = handle.clone();
-        let _ = h2.run_on_main_thread(move || {
-            close_break_windows(&h3);
-        });
-    });
+    close_break_windows(app);
     update_tray_title(app);
 }
 
@@ -889,15 +864,7 @@ fn break_postpone(app: tauri::AppHandle, state: State<'_, AppState>, _action: St
     *state.next_break_at.lock().unwrap() =
         Some(Local::now().timestamp_millis() + postpone * 1000);
     let _ = app.emit("BREAK_END", ());
-    let handle = app.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(1200));
-        let h2 = handle.clone();
-        let h3 = handle.clone();
-        let _ = h2.run_on_main_thread(move || {
-            close_break_windows(&h3);
-        });
-    });
+    close_break_windows(&app);
     update_tray_title(&app);
 }
 
