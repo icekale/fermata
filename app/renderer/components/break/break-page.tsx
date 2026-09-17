@@ -1,8 +1,8 @@
 import { motion, MotionConfig } from "framer-motion";
-import moment from "moment";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "@/i18n";
 import { Settings, SoundType } from "../../../types/settings";
+import { isPrimaryBreakWindow } from "./break-window";
 import { TimeRemaining } from "./utils";
 
 interface BreakPageProps {
@@ -30,7 +30,9 @@ export function BreakPage({
   const breakStartTime = useRef(new Date());
   const soundPlayedRef = useRef(false);
   const closingRef = useRef(closing);
+  const onEndBreakRef = useRef(onEndBreak);
   closingRef.current = closing;
+  onEndBreakRef.current = onEndBreak;
 
   useEffect(() => {
     const started = performance.now();
@@ -44,12 +46,10 @@ export function BreakPage({
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const isPrimaryWindow = useMemo(() => {
-    const windowId = new URLSearchParams(window.location.search).get(
-      "windowId",
-    );
-    return windowId === "0" || windowId === null;
-  }, []);
+  const isPrimaryWindow = useMemo(
+    () => isPrimaryBreakWindow(window.location.search),
+    [],
+  );
 
   /* No keydown handler here on purpose: break windows are created focusable:
      false (app/main/lib/windows.ts) so they never steal focus from the work
@@ -57,7 +57,8 @@ export function BreakPage({
      The buttons are the way out, and they are one click. */
 
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let cancelled = false;
 
     if (
       isPrimaryWindow &&
@@ -72,28 +73,38 @@ export function BreakPage({
     }
 
     (async () => {
-      let breakEndTime: moment.Moment;
-      if (sharedBreakEndTime) {
-        breakEndTime = moment(sharedBreakEndTime);
-      } else {
-        const lengthSeconds = await ipcRenderer.invokeGetBreakLength();
-        breakEndTime = moment().add(lengthSeconds, "seconds");
+      const breakEndTime = sharedBreakEndTime
+        ? sharedBreakEndTime
+        : Date.now() + (await ipcRenderer.invokeGetBreakLength()) * 1000;
+
+      if (cancelled) {
+        return;
       }
 
-      const startMsRemaining = breakEndTime.diff(moment(), "milliseconds");
-      setEndClock(breakEndTime.format("HH:mm"));
+      const startMsRemaining = Math.max(1, breakEndTime - Date.now());
+      const end = new Date(breakEndTime);
+      setEndClock(
+        `${String(end.getHours()).padStart(2, "0")}:${String(
+          end.getMinutes(),
+        ).padStart(2, "0")}`,
+      );
 
       const tick = () => {
-        const now = moment();
+        if (cancelled) {
+          return;
+        }
+        const now = Date.now();
         if (now > breakEndTime) {
-          const durationMs =
-            new Date().getTime() - breakStartTime.current.getTime();
+          if (closingRef.current) {
+            return;
+          }
+          const durationMs = now - breakStartTime.current.getTime();
           ipcRenderer.invokeCompleteBreakTracking(durationMs);
-          onEndBreak();
+          onEndBreakRef.current();
           return;
         }
 
-        const msRemaining = breakEndTime.diff(now, "milliseconds");
+        const msRemaining = breakEndTime - now;
         setProgress(1 - msRemaining / startMsRemaining);
         setTimeRemaining({
           hours: Math.floor(msRemaining / 1000 / 3600),
@@ -112,9 +123,10 @@ export function BreakPage({
     })();
 
     return () => {
+      cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [onEndBreak, settings, isPrimaryWindow, sharedBreakEndTime]);
+  }, [settings, isPrimaryWindow, sharedBreakEndTime]);
 
   if (timeRemaining === null || progress === null) {
     return <div className="h-full w-full" />;
@@ -142,6 +154,14 @@ export function BreakPage({
         <div
           className="flex h-full w-full select-none items-center justify-center"
           style={{ backgroundColor: settings.backgroundColor }}
+          onClick={onEndBreak}
+          onKeyDown={(event) => {
+            if (event.key === "Escape" || event.key === "Enter") {
+              onEndBreak();
+            }
+          }}
+          role="button"
+          tabIndex={0}
         >
           <motion.span
             initial={{ opacity: 0 }}

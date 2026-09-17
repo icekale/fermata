@@ -2,20 +2,23 @@ import { useCallback, useEffect, useState } from "react";
 import { Settings, SoundType } from "../../types/settings";
 import { BreakNotice } from "./break/break-notice";
 import { BreakPage } from "./break/break-page";
+import {
+  initialBreakSession,
+  onBreakClosing,
+  onBreakParked,
+  onBreakStart,
+} from "./break/break-session";
 import { isPrimaryBreakWindow } from "./break/break-window";
 
 export default function Break() {
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [countingDown, setCountingDown] = useState(true);
+  const [session, setSession] = useState(initialBreakSession);
   const [allowPostpone, setAllowPostpone] = useState<boolean | null>(null);
   const [timeSinceLastBreak, setTimeSinceLastBreak] = useState<number | null>(
     null,
   );
   const [ready, setReady] = useState(false);
-  const [closing, setClosing] = useState(false);
-  const [sharedBreakEndTime, setSharedBreakEndTime] = useState<number | null>(
-    null,
-  );
+  const { countingDown, closing, sharedBreakEndTime, generation } = session;
 
   useEffect(() => {
     const init = async () => {
@@ -31,23 +34,19 @@ export default function Break() {
       setSettings(settings);
       setTimeSinceLastBreak(timeSince);
 
-      // Skip the countdown if immediately start breaks is enabled or started from tray
       if (settings.immediatelyStartBreaks || startedFromTray) {
-        setCountingDown(false);
+        setSession((current) => ({ ...current, countingDown: false }));
       }
 
       setReady(true);
     };
 
-    // Listen for break start broadcasts from other windows
     const handleBreakStart = (breakEndTime: number) => {
-      setSharedBreakEndTime(breakEndTime);
-      setCountingDown(false);
+      setSession((current) => onBreakStart(current, breakEndTime));
     };
 
-    // Listen for break end broadcasts from other windows
     const handleBreakEnd = () => {
-      setClosing(true);
+      setSession((current) => onBreakClosing(current));
     };
 
     ipcRenderer.onBreakStart(handleBreakStart);
@@ -72,49 +71,41 @@ export default function Break() {
 
   useEffect(() => {
     if (!countingDown) {
-      // Resize window to full screen for break phase
-      const renderer = ipcRenderer as typeof ipcRenderer & {
-        invokeBreakWindowResize?: () => Promise<void>;
-      };
-      if (renderer.invokeBreakWindowResize) {
-        renderer.invokeBreakWindowResize();
-      }
+      ipcRenderer.invokeBreakWindowResize?.();
     }
-  }, [countingDown, settings]);
+  }, [countingDown, settings, generation]);
 
   useEffect(() => {
-    if (closing) {
-      /* Let the sheet dissolve into the desktop: the body's own dark
-         ground would otherwise cut the fade short with a flat rectangle. */
-      document.body.style.background = "transparent";
-      const t = setTimeout(() => {
-        window.close();
-      }, 500);
-      return () => clearTimeout(t);
+    if (!closing) {
+      return;
     }
+    /* Native hide is the core's job. This timeout is for Electron, where
+       the window actually dies, and for Tauri it parks a leftover Space
+       then resets the persistent page so the next show() is a notice. */
+    const t = setTimeout(() => {
+      window.close();
+      setSession((current) => onBreakParked(current));
+    }, 500);
+    return () => clearTimeout(t);
   }, [closing]);
 
   const handlePostponeBreak = useCallback(async () => {
     await ipcRenderer.invokeBreakPostpone("snoozed");
-    setClosing(true);
+    setSession((current) => onBreakClosing(current));
   }, []);
 
   const handleSkipBreak = useCallback(async () => {
     await ipcRenderer.invokeBreakPostpone("skipped");
-    setClosing(true);
+    setSession((current) => onBreakClosing(current));
   }, []);
 
   const handleEndBreak = useCallback(async () => {
-    // Only play end sound from primary window
-    const urlParams = new URLSearchParams(window.location.search);
-    const windowId = urlParams.get("windowId");
-    const isPrimary = windowId === "0" || windowId === null;
+    const isPrimary = isPrimaryBreakWindow(window.location.search);
 
-    if (isPrimary && settings && settings?.soundType !== SoundType.None) {
+    if (isPrimary && settings && settings.soundType !== SoundType.None) {
       ipcRenderer.invokeEndSound(settings.soundType, settings.breakSoundVolume);
     }
 
-    // Broadcast to all windows to start their closing animations
     await ipcRenderer.invokeBreakEnd();
   }, [settings]);
 
@@ -127,6 +118,7 @@ export default function Break() {
       <div className="flex h-full items-center justify-center bg-transparent">
         {ready && closing === false && (
           <BreakNotice
+            key={generation}
             onCountdownOver={handleCountdownOver}
             onPostponeBreak={handlePostponeBreak}
             onSkipBreak={handleSkipBreak}
@@ -149,6 +141,7 @@ export default function Break() {
 
   return (
     <BreakPage
+      key={generation}
       closing={closing}
       endBreakEnabled={settings.endBreakEnabled}
       onEndBreak={handleEndBreak}

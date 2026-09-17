@@ -13,6 +13,7 @@ declare const ipcRenderer: {
   invokeSetAppInitialized: () => Promise<void>;
   invokeBreakStart: () => Promise<void>;
   invokeBreakEnd: () => Promise<void>;
+  invokeBreakWindowResize?: () => Promise<void>;
   invokeGetTrayStatus: () => Promise<import("./types/breaks").TrayStatus>;
   invokeStartBreakNow: () => Promise<void>;
   invokeSetBreaksEnabled: (enabled: boolean) => Promise<void>;

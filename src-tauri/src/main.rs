@@ -13,6 +13,8 @@ use tauri::{Emitter, LogicalSize, Manager, State, WebviewUrl, WebviewWindowBuild
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_notification::NotificationExt;
 
+mod overlay;
+
 /* ------------------------------------------------------------------ */
 /* Settings — serde mirror of app/types/settings.ts, defaults included */
 /* ------------------------------------------------------------------ */
@@ -136,10 +138,15 @@ fn in_working_hours(s: &Settings, now: chrono::DateTime<Local>) -> bool {
         return true;
     }
     let minutes = now.hour() * 60 + now.minute();
-    day_for(s, now.weekday().num_days_from_sunday())
-        .ranges
-        .iter()
-        .any(|r| minutes >= r.from_minutes && minutes <= r.to_minutes)
+    let day = day_for(s, now.weekday().num_days_from_sunday());
+    overlay::day_accepts_breaks(
+        day.enabled,
+        &day.ranges
+            .iter()
+            .map(|r| (r.from_minutes, r.to_minutes))
+            .collect::<Vec<_>>(),
+        minutes,
+    )
 }
 
 fn today_window(s: &Settings) -> (Option<i64>, Option<i64>) {
@@ -394,21 +401,84 @@ fn break_windows(app: &tauri::AppHandle) -> Vec<tauri::WebviewWindow> {
 
 /* Break windows are PERSISTENT: created on first use, hidden at the end of
    every break, shown again for the next one. They are never closed and
-   never destroyed.
+   never destroyed. They also never enter a native fullscreen Space —
+   hide() on that Space is swallowed by macOS and leaves a black takeover. */
+fn layout_notice_window(win: &tauri::WebviewWindow, monitor: &tauri::Monitor) {
+    let pos = monitor.position();
+    let size = monitor.size();
+    let rect = overlay::notice_rect(pos.x as f64, pos.y as f64, size.width as f64);
+    let _ = win.set_fullscreen(overlay::USE_NATIVE_FULLSCREEN);
+    let _ = win.set_decorations(false);
+    let _ = win.set_size(LogicalSize::new(rect.width, rect.height));
+    let _ = win.set_position(tauri::PhysicalPosition::new(rect.x as i32, rect.y as i32));
+}
 
-   The teardown is two-phase on purpose: macOS's fullscreen EXIT restores
-   the window's old frame AND re-adds a titlebar (tao borderless windows
-   come back .titled after a fullscreen cycle), and it also reorders the
-   window forward — swallowing any hide() issued in the same breath. So:
-   exit the space, let it tear down, THEN strip decorations and hide. */
+fn layout_break_window(
+    win: &tauri::WebviewWindow,
+    monitor: &tauri::Monitor,
+    show_backdrop: bool,
+) {
+    let pos = monitor.position();
+    let size = monitor.size();
+    let _ = win.set_fullscreen(overlay::USE_NATIVE_FULLSCREEN);
+    let _ = win.set_decorations(false);
+    if show_backdrop {
+        let _ = win.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
+        let _ = win.set_size(tauri::PhysicalSize::new(size.width, size.height));
+        return;
+    }
+    let rect = overlay::break_rect(
+        false,
+        pos.x as f64,
+        pos.y as f64,
+        size.width as f64,
+        size.height as f64,
+    );
+    let _ = win.set_size(LogicalSize::new(rect.width, rect.height));
+    let _ = win.set_position(tauri::PhysicalPosition::new(rect.x as i32, rect.y as i32));
+}
+
+fn park_break_windows_on_main(handle: &tauri::AppHandle) -> bool {
+    let monitors = handle.available_monitors().unwrap_or_default();
+    let wins = break_windows(handle);
+    let mut was_fullscreen = false;
+    for (i, win) in wins.into_iter().enumerate() {
+        if win.is_fullscreen().unwrap_or(false) {
+            was_fullscreen = true;
+        }
+        let _ = win.hide();
+        if let Some(monitor) = monitors.get(i) {
+            layout_notice_window(&win, monitor);
+        } else {
+            let _ = win.set_fullscreen(overlay::USE_NATIVE_FULLSCREEN);
+            let _ = win.set_decorations(false);
+        }
+    }
+    was_fullscreen
+}
+
 fn close_break_windows(app: &tauri::AppHandle) {
     let handle = app.clone();
     on_main(app, move || {
-        let hidden = break_windows(&handle).len();
-        for win in break_windows(&handle) {
-            let _ = win.hide();
+        let was_fullscreen = park_break_windows_on_main(&handle);
+        log_line(
+            &handle,
+            &format!("break windows parked fullscreen_was={was_fullscreen}"),
+        );
+        for delay_ms in overlay::rehide_delays_ms(was_fullscreen) {
+            let delay_ms = *delay_ms;
+            let h2 = handle.clone();
+            let h3 = handle.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+                let _ = h2.run_on_main_thread(move || {
+                    for win in break_windows(&h3) {
+                        let _ = win.hide();
+                    }
+                    log_line(&h3, &format!("break windows re-hidden (+{delay_ms}ms)"));
+                });
+            });
         }
-        log_line(&handle, &format!("break windows hidden: {hidden}"));
     });
 }
 
@@ -430,12 +500,8 @@ fn ensure_break_windows(app: &tauri::AppHandle, full: bool) {
         let (w, h, x, y) = if full {
             (size.width as f64, size.height as f64, pos.x as f64, pos.y as f64)
         } else {
-            (
-                540.0,
-                100.0,
-                pos.x as f64 + (size.width as f64 - 540.0) / 2.0,
-                pos.y as f64 + 50.0,
-            )
+            let rect = overlay::notice_rect(pos.x as f64, pos.y as f64, size.width as f64);
+            (rect.width, rect.height, rect.x, rect.y)
         };
         let win = WebviewWindowBuilder::new(
             app,
@@ -463,27 +529,29 @@ fn ensure_break_windows(app: &tauri::AppHandle, full: bool) {
 }
 
 fn start_break(app: &tauri::AppHandle) {
-    let (_length, end_at) = {
+    let (end_at, show_backdrop) = {
         let state = app.state::<AppState>();
         if *state.having_break.lock().unwrap() {
             return; /* The renderer's countdown and the heartbeat can race. */
         }
-        let length = state.settings.lock().unwrap().break_length_seconds as i64;
+        let settings = state.settings.lock().unwrap();
+        let length = settings.break_length_seconds as i64;
+        let show_backdrop = settings.show_backdrop;
+        drop(settings);
         let end_at = Local::now().timestamp_millis() + length * 1000;
         *state.break_end_at.lock().unwrap() = Some(end_at);
         *state.having_break.lock().unwrap() = true;
         *state.next_break_at.lock().unwrap() = None;
         *state.notice_shown.lock().unwrap() = false;
         *state.postpone_count.lock().unwrap() = 0;
-        (length, end_at)
+        (end_at, show_backdrop)
     };
     log_line(app, "break start");
 
-    /* Every window operation happens on the main thread (see on_main): the
-       windows are hidden while geometry and fullscreen are applied, the
-       pages flip on BREAK_START, and the reveal lands 150ms later — so the
-       entrance animation plays on a settled fullscreen surface instead of
-       stuttering through a resize. */
+    /* Geometry is applied while hidden. No native fullscreen Space — a
+       borderless always-on-top window covering the display is enough, and
+       hide() then actually hides. Reveal only if the break is still on, so
+       a cancel during the flip cannot be undone by this delayed show. */
     let handle = app.clone();
     on_main(app, move || {
         ensure_break_windows(&handle, false);
@@ -492,27 +560,24 @@ fn start_break(app: &tauri::AppHandle) {
         for (i, monitor) in monitors.iter().enumerate() {
             let label = format!("break-{i}");
             if let Some(win) = handle.get_webview_window(&label) {
-                let pos = monitor.position();
-                let size = monitor.size();
                 let _ = win.hide();
-                let _ = win
-                    .set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
-                let _ = win
-                    .set_size(tauri::PhysicalSize::new(size.width, size.height));
-                let _ = win.set_fullscreen(true);
+                layout_break_window(&win, monitor, show_backdrop);
                 count += 1;
             }
         }
         let _ = handle.emit("BREAK_START", end_at);
         std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(450));
+            std::thread::sleep(std::time::Duration::from_millis(100));
             let h2 = handle.clone();
             let h3 = handle.clone();
             let _ = h2.run_on_main_thread(move || {
+                let having = *h3.state::<AppState>().having_break.lock().unwrap();
+                if !overlay::should_reveal_started_break(having) {
+                    log_line(&h3, "skip reveal: break already ended");
+                    return;
+                }
                 for i in 0..count {
-                    if let Some(win) =
-                        h3.get_webview_window(&format!("break-{i}"))
-                    {
+                    if let Some(win) = h3.get_webview_window(&format!("break-{i}")) {
                         let _ = win.set_decorations(false);
                         let _ = win.show();
                     }
@@ -525,10 +590,23 @@ fn start_break(app: &tauri::AppHandle) {
 
 fn end_break(app: &tauri::AppHandle) {
     let state = app.state::<AppState>();
-    if !*state.having_break.lock().unwrap() {
-        return; /* A stray Esc outside a break must not reschedule. */
+    let was_having = {
+        let mut having = state.having_break.lock().unwrap();
+        if !*having {
+            false
+        } else {
+            *having = false;
+            true
+        }
+    };
+    if !was_having {
+        /* Esc (or a second cancel) after a failed hide must still park the
+           windows. It must not reschedule a break that already ended. */
+        drop(state);
+        log_line(app, "break end (force hide)");
+        close_break_windows(app);
+        return;
     }
-    *state.having_break.lock().unwrap() = false;
     *state.break_end_at.lock().unwrap() = None;
     *state.last_break_at.lock().unwrap() = Some(Local::now().timestamp_millis());
     *state.postpone_count.lock().unwrap() = 0;
@@ -536,12 +614,15 @@ fn end_break(app: &tauri::AppHandle) {
     *state.next_break_at.lock().unwrap() = Some(Local::now().timestamp_millis() + freq * 1000);
     log_line(app, "break end");
     let _ = app.emit("BREAK_END", ());
-    /* Hide THIS frame: the desktop returns the instant the user ends the
-       break. A system notification confirms it at the OS level - visible
-       no matter how dark the desktop itself is at night. */
     let n = notif_strings(&state.settings.lock().unwrap().clone());
+    send_notification(
+        app,
+        &state.settings.lock().unwrap().clone(),
+        n.done_title,
+        "",
+    );
+    drop(state);
     close_break_windows(app);
-    send_notification(app, &state.settings.lock().unwrap().clone(), n.done_title, "");
     update_tray_title(app);
 }
 
@@ -640,11 +721,16 @@ fn tick(app: &tauri::AppHandle) {
         *state.started_from_tray.lock().unwrap() = false;
         drop(state);
         if shown {
-            /* The windows are pre-created and hidden; the slip shows. */
+            /* The windows are pre-created and hidden; restore the slip
+               size in case the last break left them covering a display. */
             let handle2 = app.clone();
             on_main(app, move || {
                 ensure_break_windows(&handle2, false);
-                for win in break_windows(&handle2) {
+                let monitors = handle2.available_monitors().unwrap_or_default();
+                for (i, win) in break_windows(&handle2).into_iter().enumerate() {
+                    if let Some(monitor) = monitors.get(i) {
+                        layout_notice_window(&win, monitor);
+                    }
                     let _ = win.show();
                 }
             });
@@ -912,16 +998,21 @@ fn resize_tray_popover(app: tauri::AppHandle, height: f64) {
 }
 
 #[tauri::command]
-fn break_window_resize(_app: tauri::AppHandle, window: tauri::Window) {
-    let win = window.clone();
+fn break_window_resize(app: tauri::AppHandle, window: tauri::Window) {
+    let label = window.label().to_string();
+    let handle = app.clone();
     let _ = window.run_on_main_thread(move || {
-        if let Some(monitor) = win.current_monitor().ok().flatten() {
-            let pos = monitor.position();
-            let size = monitor.size();
-            let _ = win.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
-            let _ = win.set_size(tauri::PhysicalSize::new(size.width, size.height));
+        let show_backdrop = handle
+            .state::<AppState>()
+            .settings
+            .lock()
+            .unwrap()
+            .show_backdrop;
+        if let Some(win) = handle.get_webview_window(&label) {
+            if let Some(monitor) = win.current_monitor().ok().flatten() {
+                layout_break_window(&win, &monitor, show_backdrop);
+            }
         }
-        let _ = win.set_fullscreen(true);
     });
 }
 
@@ -936,7 +1027,12 @@ fn log_from_renderer(app: tauri::AppHandle, msg: String) {
 #[tauri::command]
 fn close_current_window(window: tauri::Window) {
     /* Every surface hides — the app lives in the tray, and break windows
-       live for the whole process. */
+       live for the whole process. A break window must go through park so
+       a leftover fullscreen Space is actually left. */
+    if window.label().starts_with("break") {
+        close_break_windows(&window.app_handle());
+        return;
+    }
     let _ = window.hide();
 }
 
@@ -1102,8 +1198,12 @@ fn main() {
             tauri::WindowEvent::CloseRequested { api, .. } => {
                 /* No surface may die: the app lives in the tray and break
                    windows live for the whole process. */
-                let _ = window.hide();
                 api.prevent_close();
+                if window.label().starts_with("break") {
+                    close_break_windows(window.app_handle());
+                } else {
+                    let _ = window.hide();
+                }
             }
             /* The popover dismisses like every menu-bar popover: a click
                anywhere else takes focus away, and that is the exit. */

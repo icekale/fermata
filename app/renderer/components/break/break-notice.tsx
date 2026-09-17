@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import moment from "moment";
 import { useEffect, useState } from "react";
 import { useT } from "@/i18n";
 import { formatTimeSinceLastBreak } from "./utils";
@@ -30,23 +29,42 @@ export function BreakNotice({
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    const start = moment();
-    let timeoutId: NodeJS.Timeout;
+    let start = Date.now();
+    let hiddenAt = 0;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const onCountdownOverRef = onCountdownOver;
+
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now();
+        return;
+      }
+      if (hiddenAt) {
+        start += Date.now() - hiddenAt;
+        hiddenAt = 0;
+      }
+    };
 
     const tick = () => {
-      const elapsed = moment().diff(start, "milliseconds");
+      if (document.visibilityState === "hidden") {
+        timeoutId = setTimeout(tick, 250);
+        return;
+      }
+      const elapsed = Date.now() - start;
       if (elapsed >= TOTAL_COUNTDOWN_MS) {
-        onCountdownOver();
+        onCountdownOverRef();
         return;
       }
       setElapsed(elapsed);
       setPhase(elapsed < GRACE_PERIOD_MS ? "grace" : "countdown");
-      timeoutId = setTimeout(tick, 100);
+      timeoutId = setTimeout(tick, 250);
     };
 
+    document.addEventListener("visibilitychange", onVisibility);
     tick();
     return () => {
-      if (timeoutId) clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [onCountdownOver]);
 
