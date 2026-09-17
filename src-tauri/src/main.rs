@@ -273,6 +273,7 @@ fn is_zh(s: &Settings) -> bool {
    "away" ping. Strings mirror app/i18n. */
 struct NotifStrings {
     break_title: &'static str,
+    done_title: &'static str,
     idle_title: &'static str,
     idle_body: &'static str,
 }
@@ -281,12 +282,14 @@ fn notif_strings(s: &Settings) -> NotifStrings {
     if is_zh(s) {
         NotifStrings {
             break_title: "该休息了！",
+            done_title: "✓ 休息完成",
             idle_title: "检测到你已经在休息",
             idle_body: "已离开",
         }
     } else {
         NotifStrings {
             break_title: "Time for a break!",
+            done_title: "✓ Break complete",
             idle_title: "Break automatically detected",
             idle_body: "Away for",
         }
@@ -533,17 +536,12 @@ fn end_break(app: &tauri::AppHandle) {
     *state.next_break_at.lock().unwrap() = Some(Local::now().timestamp_millis() + freq * 1000);
     log_line(app, "break end");
     let _ = app.emit("BREAK_END", ());
-    /* The renderer plays an ~800ms completion beat; hide after it lands.
-       Safety net in case the renderer never gets there. */
-    let handle = app.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(1500));
-        let h2 = handle.clone();
-        let h3 = handle.clone();
-        let _ = h2.run_on_main_thread(move || {
-            close_break_windows(&h3);
-        });
-    });
+    /* Hide THIS frame: the desktop returns the instant the user ends the
+       break. A system notification confirms it at the OS level - visible
+       no matter how dark the desktop itself is at night. */
+    let n = notif_strings(&state.settings.lock().unwrap().clone());
+    close_break_windows(app);
+    send_notification(app, &state.settings.lock().unwrap().clone(), n.done_title, "");
     update_tray_title(app);
 }
 
@@ -874,15 +872,7 @@ fn break_postpone(app: tauri::AppHandle, state: State<'_, AppState>, _action: St
     *state.next_break_at.lock().unwrap() =
         Some(Local::now().timestamp_millis() + postpone * 1000);
     let _ = app.emit("BREAK_END", ());
-    let handle = app.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(1500));
-        let h2 = handle.clone();
-        let h3 = handle.clone();
-        let _ = h2.run_on_main_thread(move || {
-            close_break_windows(&h3);
-        });
-    });
+    close_break_windows(&app);
     update_tray_title(&app);
 }
 
